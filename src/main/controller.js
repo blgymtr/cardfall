@@ -167,6 +167,7 @@ class Controller extends EventEmitter {
 
   // ---- kasa / kilit ------------------------------------------------------------------------
   async setup(pass) {
+    if (this.vault.exists()) return { ok: false, message: 'Kasa zaten kurulu.' };
     const err = checkPassphrase(pass);
     if (err) return { ok: false, message: err };
     await this.vault.create(pass);

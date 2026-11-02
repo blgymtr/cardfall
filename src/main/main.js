@@ -148,7 +148,7 @@ function boot() {
     handle('auth:setup', (pass) => (isStr(pass, 128) ? controller.setup(pass) : { ok: false, message: 'Geçersiz parola' }));
     handle('auth:unlock', (pass) => (isStr(pass, 128) ? controller.unlock(pass) : { ok: false, code: 'WRONG' }));
     handle('auth:lock', () => controller.lock());
-    handle('auth:change', (a, b) => (isStr(a, 128) && isStr(b, 128) ? controller.changePassphrase(a, b) : { ok: false, message: 'Geçersiz' }));
+    handle('auth:change', (a, b) => (isStr(a, 128) && isStr(b, 128) ? controller.changePassphrase(a, b) : { ok: false, message: 'Geçersiz' }), { needReady: true });
     handle('login:start', () => { if (controller.phase() === 'login') controller.startLogin(); });
     handle('account:logout', () => controller.logout(), { needReady: true });
     handle('account:wipe', (word) => { if (word !== 'SIL') return { ok: false, error: 'confirm' }; controller.wipeEverything(); });

@@ -270,3 +270,5 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px c
   .stats { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.gate-card > .btn.sm { margin-top: 14px; }

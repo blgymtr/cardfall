@@ -147,8 +147,11 @@
       const form = h('form', { novalidate: true }, pass, pass2, meter, err, btn);
       const notice = h('p', { class: 'notice', hidden: true });
       const sub = h('p', { class: 'sub', text: setup ? 'İlk kurulum — Steam oturum anahtarını koruyacak bir parola belirle.' : 'Kilitli. Devam etmek için parolanı gir.' });
+      const forgot = setup ? null : h('button', { class: 'btn sm', type: 'button', text: 'Parolamı unuttum', onclick: async () => {
+        if (await confirmDialog({ title: 'Parolayı unuttum', text: 'Parola kurtarılamaz. Devam edersen kayıtlı Steam oturumu ve tüm yerel veriler silinir; sonra yeni parola ve QR ile baştan kurarsın.', ok: 'Her şeyi sil', danger: true, typed: 'SIL' })) api.wipe('SIL');
+      } });
       const card = h('div', { class: 'card gate-card' },
-        h('img', { class: 'logo', src: 'icon.png', alt: '' }), h('h1', { text: 'Cardfall' }), sub, notice, form,
+        h('img', { class: 'logo', src: 'icon.png', alt: '' }), h('h1', { text: 'Cardfall' }), sub, notice, form, forgot,
         h('p', { class: 'fine', text: setup
           ? 'Parola yalnızca bu bilgisayarda kalır, hiçbir yere gönderilmez. Unutursan kayıtlı Steam oturumu silinir ve QR ile yeniden giriş yaparsın.'
           : 'Yanlış parola denemeleri yavaşlatılır; 10 hatada kayıtlı oturum silinir.' }));
