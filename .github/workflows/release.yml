@@ -34,7 +34,7 @@ jobs:
           $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
           "$h  $($f.Name)" | Out-File -Encoding ascii release\SHA256SUMS.txt
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: release/Cardfall-Setup-*.exe
       - name: Publish release
