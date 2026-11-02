@@ -47,8 +47,8 @@ class Engine extends EventEmitter {
   get blocked() { return !!this.backend.blocked; }
   isActive() { return this.run === 'running' && !this.blocked && this.idling.length > 0; }
 
-  log(kind, text) {
-    this.logs.unshift({ t: this.now(), kind, text });
+  log(kind, key, params = {}) {
+    this.logs.unshift({ t: this.now(), kind, key, params });
     if (this.logs.length > 60) this.logs.length = 60;
   }
 
@@ -110,7 +110,7 @@ class Engine extends EventEmitter {
       this.backend.setGames(want);
       if (changedSet && want.length) {
         const names = want.slice(0, 2).map((id) => this.games.get(id)?.name).filter(Boolean).join(', ');
-        this.log('play', want.length > 2 ? `${names} ve ${want.length - 2} oyun daha çalışıyor` : `${names} çalışıyor`);
+        this.log('play', want.length > 2 ? 'log.playMore' : 'log.play', { names, n: want.length - 2 });
       }
     }
     this._accrue();
@@ -121,7 +121,7 @@ class Engine extends EventEmitter {
   async start() {
     if (this.run === 'running') return;
     this.run = 'running';
-    this.log('info', 'Başlatıldı');
+    this.log('info', 'log.started');
     if (!this.games.size) await this.refresh();
     this._apply(true);
     this._schedule();
@@ -137,7 +137,7 @@ class Engine extends EventEmitter {
     this.applied = '[]';
     clearTimeout(this._refreshTimer);
     this.store.statsFile.save();
-    this.log('info', 'Duraklatıldı');
+    this.log('info', 'log.paused');
     this.changed();
   }
 
@@ -152,7 +152,7 @@ class Engine extends EventEmitter {
     const g = this.games.get(Number(appid));
     if (!g || g.drops <= 0) return;
     this.pinned = g.appid;
-    this.log('info', `Elle seçildi: ${g.name}`);
+    this.log('info', 'log.pinned', { name: g.name });
     if (this.run !== 'running') { this.start(); return; }
     this._apply();
   }
@@ -160,7 +160,7 @@ class Engine extends EventEmitter {
   unpin() {
     if (this.pinned == null) return;
     this.pinned = null;
-    this.log('info', 'Otomatik sıraya dönüldü');
+    this.log('info', 'log.unpinned');
     this._apply();
   }
 
@@ -212,12 +212,12 @@ class Engine extends EventEmitter {
       const list = await this.backend.fetchGames();
       this._merge(list);
       this.lastRefresh = this.now();
-      this.log('info', `Yenilendi · ${this.totals().drops} kart hakkı`);
+      this.log('info', 'log.refreshed', { n: this.totals().drops });
       const ids = this._queue().map((g) => g.appid);
       this.prices.ensure(ids);
     } catch (e) {
-      this.error = e && e.message ? String(e.message) : 'Yenileme başarısız';
-      this.log('error', `Yenileme başarısız: ${this.error}`);
+      this.error = e && e.message ? String(e.message) : 'Refresh failed';
+      this.log('error', 'log.refreshFailed', { reason: this.error });
     } finally {
       this.refreshing = false;
       this._apply();
@@ -236,7 +236,7 @@ class Engine extends EventEmitter {
         this.dropped += n;
         this.store.stats.dropped += n;
         if (p) { this.droppedValue += p.unit * n; this.store.stats.value += p.unit * n; }
-        this.log('drop', `${g.name}: +${n} kart düştü${g.drops === 0 ? ' (tamamlandı)' : ''}`);
+        this.log('drop', g.drops === 0 ? 'log.dropDone' : 'log.drop', { name: g.name, n });
         this.emit('drop', { name: g.name, n });
         this.store.statsFile.save();
       }
@@ -244,7 +244,7 @@ class Engine extends EventEmitter {
     }
     for (const id of [...this.games.keys()]) if (!seen.has(id)) this.games.delete(id);
     this.completed = [...this.games.values()].filter((g) => g.drops === 0).length;
-    if (first && this.games.size) this.log('info', `${this._queue().length} oyun sırada`);
+    if (first && this.games.size) this.log('info', 'log.queued', { n: this._queue().length });
   }
 
   // ---- görünüm ------------------------------------------------------------------------

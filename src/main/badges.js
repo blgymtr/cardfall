@@ -62,7 +62,7 @@ async function fetchAllBadges({ steamid, cookies, onPage }) {
     for (const g of page.games) byId.set(g.appid, g);
     if (onPage) onPage(p, first.pages);
   }
-  if (byId.size === 0) throw new http.HttpError('EMPTY', 'Rozet sayfası okunamadı (oturum geçersiz olabilir)');
+  if (byId.size === 0) throw new http.HttpError('EMPTY', 'Could not read the badges page (session may be invalid)');
   return [...byId.values()];
 }
 

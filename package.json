@@ -1,8 +1,8 @@
 {
   "name": "cardfall",
   "productName": "Cardfall",
-  "version": "1.0.0",
-  "description": "Steam kart düşürme programı — yalnızca kişisel kullanım için",
+  "version": "1.1.0",
+  "description": "Steam trading card idler with QR sign-in, an encrypted vault and a TR/EN/DE interface",
   "author": "Ömer",
   "main": "src/main/main.js",
   "private": true,
@@ -61,14 +61,17 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Cardfall",
       "installerLanguages": [
+        "en_US",
+        "de_DE",
         "tr_TR"
       ],
-      "language": "1055",
       "runAfterFinish": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "multiLanguageInstaller": true
     },
     "electronLanguages": [
       "tr",
+      "de",
       "en-US"
     ],
     "electronFuses": {
@@ -80,5 +83,20 @@
       "onlyLoadAppFromAsar": true,
       "grantFileProtocolExtraPrivileges": false
     }
-  }
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/blgymtr/cardfall",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blgymtr/cardfall.git"
+  },
+  "bugs": {
+    "url": "https://github.com/blgymtr/cardfall/issues"
+  },
+  "keywords": [
+    "steam",
+    "trading-cards",
+    "idle",
+    "electron"
+  ]
 }

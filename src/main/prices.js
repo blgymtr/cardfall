@@ -155,7 +155,7 @@ class PriceService extends EventEmitter {
       q.append('category_753_item_class[0]', 'tag_item_class_2'); // ticaret kartı
       q.append('category_753_cardborder[0]', 'tag_cardborder_0'); // foil olmayan
       const json = await http.getJson(`https://steamcommunity.com/market/search/render/?${q}`, { cookies: this.getCookies && this.getCookies() });
-      if (!json || json.success === false) throw new http.HttpError('MARKET', 'Pazar yanıtı geçersiz');
+      if (!json || json.success === false) throw new http.HttpError('MARKET', 'Invalid market response');
       const got = json.results || [];
       results.push(...got);
       total = Number(json.total_count) || 0;

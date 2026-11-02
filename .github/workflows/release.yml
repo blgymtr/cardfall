@@ -1,0 +1,39 @@
+name: Release
+
+# Run manually (Actions -> Release -> Run workflow) with the tag to publish, e.g. v1.2.0.
+# The workflow builds the installer on a clean Windows runner, checksums it and creates the release.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (must match package.json version, e.g. v1.2.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx electron-builder --win nsis --publish never
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $f = Get-ChildItem release\Cardfall-Setup-*.exe | Select-Object -First 1
+          $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+          "$h  $($f.Name)" | Out-File -Encoding ascii release\SHA256SUMS.txt
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $f = Get-ChildItem release\Cardfall-Setup-*.exe | Select-Object -First 1
+          gh release create "${{ inputs.tag }}" $f.FullName release\SHA256SUMS.txt --target "${{ github.sha }}" --generate-notes --title "Cardfall ${{ inputs.tag }}"

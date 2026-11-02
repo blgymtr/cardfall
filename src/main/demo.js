@@ -65,7 +65,7 @@ class DemoPrices extends PriceService {
   constructor(o) {
     super(o);
     this.gap = 120;
-    if (!this.cache.template) this.cache.template = { prefix: '₺', suffix: '', dec: ',', decimals: 2, hasDecimals: true };
+    if (!this.cache.template) this.cache.template = { prefix: "$", suffix: "", dec: ".", decimals: 2, hasDecimals: true };
   }
   async _fetchOne(appid) {
     this.cache.games[appid] = { t: Date.now(), unit: 0.4 + ((appid * 37) % 520) / 100, count: 6 };

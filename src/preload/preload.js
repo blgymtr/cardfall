@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('cardfall', Object.freeze({
   setup: (pass) => call('auth:setup', pass),
   unlock: (pass) => call('auth:unlock', pass),
   lock: () => call('auth:lock'),
+  setLanguage: (lang) => call('lang:set', lang),
   changePassphrase: (oldPass, newPass) => call('auth:change', oldPass, newPass),
   startLogin: () => call('login:start'),
   logout: () => call('account:logout'),

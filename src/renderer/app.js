@@ -1,10 +1,20 @@
 'use strict';
 (() => {
   const api = window.cardfall;
+  const I18N = window.I18N;
   const NS = 'http://www.w3.org/2000/svg';
-  const nf = new Intl.NumberFormat('tr-TR');
   const root = document.getElementById('root');
   const tbActions = document.getElementById('tb-actions');
+
+  // ---- dil -------------------------------------------------------------------------------
+  let lang = 'en';
+  let nf = new Intl.NumberFormat(I18N.LOCALES.en);
+  const T = (key, params) => I18N.t(lang, key, params);
+  function applyLang(next) {
+    lang = next;
+    nf = new Intl.NumberFormat(I18N.LOCALES[lang]);
+    document.documentElement.lang = lang;
+  }
 
   // ---- küçük DOM yardımcıları (içerik her zaman textContent ile yazılır) ----------------
   function h(tag, props, ...kids) {
@@ -35,7 +45,7 @@
     layers: [['polygon', { points: '12 2 2 7 12 12 22 7 12 2' }], ['polyline', { points: '2 17 12 22 22 17' }], ['polyline', { points: '2 12 12 17 22 12' }]],
     list: [['line', { x1: 8, y1: 6, x2: 21, y2: 6 }], ['line', { x1: 8, y1: 12, x2: 21, y2: 12 }], ['line', { x1: 8, y1: 18, x2: 21, y2: 18 }], ['line', { x1: 3, y1: 6, x2: 3.01, y2: 6 }], ['line', { x1: 3, y1: 12, x2: 3.01, y2: 12 }], ['line', { x1: 3, y1: 18, x2: 3.01, y2: 18 }]],
     gift: [['polyline', { points: '20 12 20 22 4 22 4 12' }], ['rect', { x: 2, y: 7, width: 20, height: 5 }], ['line', { x1: 12, y1: 22, x2: 12, y2: 7 }], ['path', { d: 'M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z' }]],
-    coin: [['circle', { cx: 12, cy: 12, r: 10 }], ['path', { d: 'M15 9c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.300 2.200-3 2.200-1.300 0-2.400-.6-3-1.500M12 6v1.500m0 9V18' }]],
+    coin: [['circle', { cx: 12, cy: 12, r: 10 }], ['path', { d: 'M15 9c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2-1.3 0-2.4-.6-3-1.5M12 6v1.5m0 9V18' }]],
     shield: [['path', { d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' }], ['polyline', { points: '9 12 11 14 15 10' }]],
     check: [['polyline', { points: '20 6 9 17 4 12' }]],
     cards: [['rect', { x: 3, y: 5, width: 13, height: 17, rx: 2, transform: 'rotate(-8 9 13)' }], ['rect', { x: 8, y: 2, width: 13, height: 17, rx: 2 }]],
@@ -63,12 +73,12 @@
   }
   function longDur(ms) {
     const m = Math.floor(ms / 60000);
-    if (m < 60) return `${m} dk`;
+    if (m < 60) return T('dur.min', { n: m });
     const hr = Math.floor(m / 60);
-    return hr < 100 ? `${hr} sa ${m % 60} dk` : `${nf.format(hr)} sa`;
+    return hr < 100 ? T('dur.hm', { h: hr, m: m % 60 }) : T('dur.h', { h: nf.format(hr) });
   }
-  const hhmm = (t) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const hhmmss = (t) => new Date(t).toLocaleTimeString('tr-TR');
+  const hhmm = (t) => new Date(t).toLocaleTimeString(I18N.LOCALES[lang], { hour: '2-digit', minute: '2-digit' });
+  const hhmmss = (t) => new Date(t).toLocaleTimeString(I18N.LOCALES[lang]);
   const imgUrl = (appid, v = 'capsule') => `cardfall://img/${appid}/${v}`;
 
   function gameImg(appid, variant) {
@@ -85,21 +95,20 @@
 
   // ---- durum ---------------------------------------------------------------------------------
   let S = null;
-  let view = null;       // şu an gösterilen görünüm: gate | login | connecting | app
-  let ui = {};           // ana ekran referansları
+  let view = null;       // şu an gösterilen görünüm
+  let ui = {};           // ekran referansları
   let lastDropped = null;
   let waitUntil = 0;
   let q = { search: '', black: false };
   let listSig = '';
 
-  function setView(name, build) {
-    if (view === name) return false;
-    view = name;
-    root.replaceChildren(build());
-    return true;
-  }
-
   function render(state) {
+    if (state.lang && state.lang !== lang) {
+      applyLang(state.lang);
+      view = null; ui = {}; listSig = ''; lastDropped = null;
+      tbActions.dataset.sig = '';
+      closeModal();
+    }
     S = state;
     document.getElementById('tb-demo').hidden = !state.demo;
     renderTitleActions(state);
@@ -110,18 +119,22 @@
       case 'ready': showApp(state); break;
       default: break;
     }
-    closeModalIfLocked(state);
+    if (state.phase !== 'ready') closeModal();
   }
 
   function renderTitleActions(state) {
     const ready = state.phase === 'ready';
-    const sig = ready ? 'ready' : (state.phase === 'login' || state.phase === 'connecting') ? 'lockonly' : 'none';
+    const canLock = ready || state.phase === 'login' || state.phase === 'connecting';
+    const sig = `${ready ? 'r' : canLock ? 'l' : 'n'}:${lang}`;
     if (tbActions.dataset.sig === sig) return;
     tbActions.dataset.sig = sig;
     tbActions.replaceChildren();
-    if (sig === 'none') return;
-    if (ready) tbActions.append(h('button', { class: 'icon-btn', title: 'Ayarlar', onclick: () => openSettings() }, icon('sliders', 17)));
-    tbActions.append(h('button', { class: 'icon-btn', title: 'Kilitle', onclick: () => api.lock() }, icon('lock', 17)));
+    const langSel = h('select', { class: 'lang-sel', title: T('tb.lang'), 'aria-label': T('tb.lang'), onchange: (e) => api.setLanguage(e.target.value) },
+      I18N.LANGS.map((l) => h('option', { value: l, text: I18N.NAMES[l] })));
+    langSel.value = lang;
+    tbActions.append(langSel);
+    if (ready) tbActions.append(h('button', { class: 'icon-btn', title: T('tb.settings'), onclick: () => openSettings() }, icon('sliders', 17)));
+    if (canLock) tbActions.append(h('button', { class: 'icon-btn', title: T('tb.lock'), onclick: () => api.lock() }, icon('lock', 17)));
   }
 
   // ---- kapı: kurulum / kilit ---------------------------------------------------------------------
@@ -139,22 +152,20 @@
     const mode = setup ? 'setup' : 'locked';
     if (view !== 'gate:' + mode) {
       view = 'gate:' + mode;
-      const pass = h('input', { type: 'password', placeholder: setup ? 'Yeni parola (en az 8 karakter)' : 'Parola', autocomplete: 'off', spellcheck: 'false', maxlength: 128 });
-      const pass2 = setup ? h('input', { type: 'password', placeholder: 'Parolayı tekrar yaz', autocomplete: 'off', spellcheck: 'false', maxlength: 128 }) : null;
+      const pass = h('input', { type: 'password', placeholder: setup ? T('gate.passNew') : T('gate.pass'), autocomplete: 'off', spellcheck: 'false', maxlength: 128 });
+      const pass2 = setup ? h('input', { type: 'password', placeholder: T('gate.passRepeat'), autocomplete: 'off', spellcheck: 'false', maxlength: 128 }) : null;
       const meter = setup ? h('div', { class: 'meter', 'data-s': '0' }, h('i'), h('i'), h('i'), h('i')) : null;
       const err = h('p', { class: 'err' });
-      const btn = h('button', { class: 'btn primary big', type: 'submit', text: setup ? 'Parolayı oluştur' : 'Kilidi aç' });
+      const btn = h('button', { class: 'btn primary big', type: 'submit', text: setup ? T('gate.create') : T('gate.unlock') });
       const form = h('form', { novalidate: true }, pass, pass2, meter, err, btn);
       const notice = h('p', { class: 'notice', hidden: true });
-      const sub = h('p', { class: 'sub', text: setup ? 'İlk kurulum — Steam oturum anahtarını koruyacak bir parola belirle.' : 'Kilitli. Devam etmek için parolanı gir.' });
-      const forgot = setup ? null : h('button', { class: 'btn sm', type: 'button', text: 'Parolamı unuttum', onclick: async () => {
-        if (await confirmDialog({ title: 'Parolayı unuttum', text: 'Parola kurtarılamaz. Devam edersen kayıtlı Steam oturumu ve tüm yerel veriler silinir; sonra yeni parola ve QR ile baştan kurarsın.', ok: 'Her şeyi sil', danger: true, typed: 'SIL' })) api.wipe('SIL');
+      const sub = h('p', { class: 'sub', text: setup ? T('gate.setupSub') : T('gate.lockedSub') });
+      const forgot = setup ? null : h('button', { class: 'btn sm', type: 'button', text: T('gate.forgot'), onclick: async () => {
+        if (await confirmDialog({ title: T('forgot.title'), text: T('forgot.text'), ok: T('forgot.ok'), danger: true, typed: I18N.CONFIRM_WORD[lang] })) api.wipe('SIL');
       } });
       const card = h('div', { class: 'card gate-card' },
         h('img', { class: 'logo', src: 'icon.png', alt: '' }), h('h1', { text: 'Cardfall' }), sub, notice, form, forgot,
-        h('p', { class: 'fine', text: setup
-          ? 'Parola yalnızca bu bilgisayarda kalır, hiçbir yere gönderilmez. Unutursan kayıtlı Steam oturumu silinir ve QR ile yeniden giriş yaparsın.'
-          : 'Yanlış parola denemeleri yavaşlatılır; 10 hatada kayıtlı oturum silinir.' }));
+        h('p', { class: 'fine', text: setup ? T('gate.fineSetup') : T('gate.fineLocked') }));
       ui.gate = { pass, pass2, meter, err, btn, notice, sub };
       if (setup) pass.addEventListener('input', () => { meter.dataset.s = String(strength(pass.value)); });
       form.addEventListener('submit', async (e) => {
@@ -162,11 +173,11 @@
         if (btn.disabled) return;
         err.textContent = '';
         if (setup) {
-          if (pass.value !== pass2.value) { err.textContent = 'Parolalar aynı değil.'; return; }
+          if (pass.value !== pass2.value) { err.textContent = T('gate.mismatch'); return; }
           btn.disabled = true;
           const r = await api.setup(pass.value);
           btn.disabled = false;
-          if (!r.ok) err.textContent = r.message || 'Kurulum başarısız.';
+          if (!r.ok) err.textContent = r.messageKey ? T(r.messageKey) : T('gate.setupFail');
           else { pass.value = ''; pass2.value = ''; }
         } else {
           btn.disabled = true;
@@ -182,25 +193,25 @@
     }
     const g = ui.gate;
     g.notice.hidden = !state.notice;
-    g.notice.textContent = state.notice || '';
+    g.notice.textContent = state.notice ? T(state.notice) : '';
     if (!setup && state.lock && state.lock.waitMs > 0 && !waitUntil) {
       waitUntil = Date.now() + state.lock.waitMs;
       tickWait();
     }
     if (!setup && state.lock && state.lock.fails > 0 && !g.err.textContent && !waitUntil) {
-      g.err.textContent = `Kalan deneme: ${state.lock.left}`;
+      g.err.textContent = T('gate.attemptsLeft', { n: state.lock.left });
     }
   }
 
   function gateError(r) {
     const g = ui.gate;
     if (!g) return;
-    if (r.code === 'WRONG') g.err.textContent = `Parola yanlış. Kalan deneme: ${r.left}`;
-    else if (r.code === 'LOCKED') g.err.textContent = `Çok fazla deneme. Bekle…`;
-    else if (r.code === 'WIPED') g.err.textContent = 'Kayıtlı oturum silindi.';
-    else if (r.code === 'CORRUPT') g.err.textContent = 'Kasa okunamadı (farklı Windows hesabı olabilir).';
-    else if (r.code === 'BUSY') g.err.textContent = 'Bir saniye…';
-    else g.err.textContent = 'İşlem başarısız.';
+    if (r.code === 'WRONG') g.err.textContent = T('gate.wrong', { n: r.left });
+    else if (r.code === 'LOCKED') g.err.textContent = T('gate.tooMany');
+    else if (r.code === 'WIPED') g.err.textContent = T('gate.wiped');
+    else if (r.code === 'CORRUPT') g.err.textContent = T('gate.corrupt');
+    else if (r.code === 'BUSY') g.err.textContent = T('gate.busy');
+    else g.err.textContent = T('gate.fail');
     if (r.waitMs > 0) { waitUntil = Date.now() + r.waitMs; tickWait(); }
   }
 
@@ -210,7 +221,7 @@
     const left = waitUntil - Date.now();
     if (left <= 0) { waitUntil = 0; g.btn.disabled = false; g.err.textContent = ''; return; }
     g.btn.disabled = true;
-    g.err.textContent = `Çok fazla yanlış deneme — ${Math.ceil(left / 1000)} sn bekle`;
+    g.err.textContent = T('gate.wait', { s: Math.ceil(left / 1000) });
     setTimeout(tickWait, 500);
   }
 
@@ -221,30 +232,26 @@
       const box = h('div', { class: 'qr-box' });
       ui.login = { box, notice: h('p', { class: 'notice', hidden: true }) };
       const right = h('div', {},
-        h('h2', { text: 'Steam hesabına bağlan' }),
-        h('p', { text: 'Parolanı bu uygulamaya girmene gerek yok. Telefonundaki Steam uygulamasıyla QR kodu okut.' }),
+        h('h2', { text: T('login.title') }),
+        h('p', { text: T('login.lead') }),
         ui.login.notice,
-        h('ol', { class: 'steps' },
-          h('li', { text: 'Telefonunda Steam uygulamasını aç.' }),
-          h('li', { text: 'Steam Guard bölümünden QR kodu tara seçeneğini seç.' }),
-          h('li', { text: 'Soldaki kodu okut ve girişi onayla.' })),
-        h('div', { class: 'shield' }, icon('shield', 18),
-          h('span', { text: 'Steam parolan hiç alınmaz. Yalnızca Steam\'in verdiği yenileme anahtarı, kasa parolanla şifrelenip bu bilgisayarda saklanır.' })));
+        h('ol', { class: 'steps' }, h('li', { text: T('login.s1') }), h('li', { text: T('login.s2') }), h('li', { text: T('login.s3') })),
+        h('div', { class: 'shield' }, icon('shield', 18), h('span', { text: T('login.shield') })));
       root.replaceChildren(h('div', { class: 'center' }, h('div', { class: 'card login' }, box, right)));
     }
     const { box, notice } = ui.login;
     notice.hidden = !state.notice;
-    notice.textContent = state.notice || '';
+    notice.textContent = state.notice ? T(state.notice) : '';
     const qr = state.qr || { state: 'idle' };
     const sig = qr.state + (qr.image ? qr.image.length : '');
     if (box.dataset.sig === sig) return;
     box.dataset.sig = sig;
     box.replaceChildren();
-    if (qr.image) box.append(h('img', { src: qr.image, alt: 'Steam giriş QR kodu', draggable: 'false' }));
-    if (qr.state === 'idle') box.append(h('div', { class: 'qr-veil' }, h('div', { class: 'spinner' }), h('span', { text: 'QR hazırlanıyor…' })));
-    else if (qr.state === 'scanned') box.append(h('div', { class: 'qr-veil' }, icon('check', 34), h('span', { text: 'Okutuldu — telefonda onayla' })));
-    else if (qr.state === 'expired') box.append(h('div', { class: 'qr-veil' }, h('div', { class: 'spinner' }), h('span', { text: 'Süresi doldu, yenileniyor…' })));
-    else if (qr.state === 'error') box.append(h('div', { class: 'qr-veil' }, h('span', { text: qr.error || 'Bir sorun oluştu' }), h('button', { class: 'btn primary', text: 'Tekrar dene', onclick: () => api.startLogin() })));
+    if (qr.image) box.append(h('img', { src: qr.image, alt: T('qr.alt'), draggable: 'false' }));
+    if (qr.state === 'idle') box.append(h('div', { class: 'qr-veil' }, h('div', { class: 'spinner' }), h('span', { text: T('qr.preparing') })));
+    else if (qr.state === 'scanned') box.append(h('div', { class: 'qr-veil' }, icon('check', 34), h('span', { text: T('qr.scanned') })));
+    else if (qr.state === 'expired') box.append(h('div', { class: 'qr-veil' }, h('div', { class: 'spinner' }), h('span', { text: T('qr.expired') })));
+    else if (qr.state === 'error') box.append(h('div', { class: 'qr-veil' }, h('span', { text: qr.error ? T(qr.error) : T('qr.generic') }), h('button', { class: 'btn primary', text: T('qr.retry'), onclick: () => api.startLogin() })));
   }
 
   function showConnecting(state) {
@@ -252,9 +259,10 @@
       view = 'connecting';
       ui.conn = { msg: h('p', { class: 'muted' }) };
       root.replaceChildren(h('div', { class: 'center' }, h('div', { class: 'card gate-card' },
-        h('div', { class: 'spinner' }), h('h1', { text: 'Steam\'e bağlanılıyor' }), ui.conn.msg)));
+        h('div', { class: 'spinner' }), h('h1', { text: T('conn.title') }), ui.conn.msg)));
     }
-    ui.conn.msg.textContent = state.connectError ? `Bağlantı sorunu: ${state.connectError}. Otomatik yeniden denenecek.` : (state.account && state.account.name ? `${state.account.name} hesabı` : 'Lütfen bekle…');
+    ui.conn.msg.textContent = state.connectError ? T('conn.problem', { reason: state.connectError })
+      : (state.account && state.account.name ? T('conn.account', { name: state.account.name }) : T('conn.wait'));
   }
 
   // ---- ana ekran ------------------------------------------------------------------------------------
@@ -272,42 +280,41 @@
     const chips = h('div', { class: 'chips' });
     const flow = h('div', { class: 'flow' });
     const toggle = h('button', { class: 'btn primary', onclick: () => api.toggle() });
-    const next = h('button', { class: 'btn', onclick: () => api.next() }, icon('next', 16), 'Sıradaki oyun');
-    const auto = h('button', { class: 'btn', onclick: () => api.unpin() }, icon('layers', 16), 'Otomatiğe dön');
+    const next = h('button', { class: 'btn', onclick: () => api.next() }, icon('next', 16), T('btn.next'));
+    const auto = h('button', { class: 'btn', onclick: () => api.unpin() }, icon('layers', 16), T('btn.auto'));
     const hero = h('section', { class: 'card hero' }, art,
       h('div', { class: 'hero-info' }, eyebrow, title, sub, chips, flow, h('div', { class: 'hero-actions' }, toggle, next, auto)));
 
     const lastRefresh = h('span', { class: 'muted small' });
-    const refreshBtn = h('button', { class: 'btn sm', onclick: () => { refreshBtn.disabled = true; api.refresh(); } }, icon('refresh', 14), h('span', { text: 'Yenile' }));
-    const head = h('div', { class: 'section-head' }, h('h2', { text: 'Genel bakış' }), h('div', { class: 'grow' }), lastRefresh, refreshBtn);
+    const refreshBtn = h('button', { class: 'btn sm', onclick: () => { refreshBtn.disabled = true; api.refresh(); } }, icon('refresh', 14), h('span', { text: T('btn.refresh') }));
+    const head = h('div', { class: 'section-head' }, h('h2', { text: T('ov.title') }), h('div', { class: 'grow' }), lastRefresh, refreshBtn);
 
     const t = {
-      uptime: tile('Çalışma süresi', 'clock', false),
-      drops: tile('Kalan kart hakkı', 'cards', false),
-      queue: tile('Sırada', 'list', false),
-      got: tile('Bu oturumda düşen', 'gift', false),
-      value: tile('Tahmini değer', 'coin', true),
+      uptime: tile(T('s.uptime'), 'clock', false),
+      drops: tile(T('s.drops'), 'cards', false),
+      queue: tile(T('s.queue'), 'list', false),
+      got: tile(T('s.got'), 'gift', false),
+      value: tile(T('s.value'), 'coin', true),
     };
     const stats = h('div', { class: 'stats' }, t.uptime.el, t.drops.el, t.queue.el, t.got.el, t.value.el);
 
-    const search = h('input', { type: 'search', placeholder: 'Oyun ara…', spellcheck: 'false', oninput: (e) => { q.search = e.target.value.trim().toLocaleLowerCase('tr'); renderList(); } });
+    const search = h('input', { type: 'search', placeholder: T('queue.search'), spellcheck: 'false', oninput: (e) => { q.search = e.target.value.trim().toLocaleLowerCase(lang); renderList(); } });
     const order = h('select', { onchange: (e) => api.setSettings({ order: e.target.value }) },
-      h('option', { value: 'drops-desc', text: 'En çok kart' }), h('option', { value: 'value-desc', text: 'En değerli' }),
-      h('option', { value: 'hours-asc', text: 'En az saat' }), h('option', { value: 'name', text: 'Ada göre' }));
-    const blackBtn = h('button', { class: 'icon-btn', title: 'Gizlenen oyunları göster', onclick: () => { q.black = !q.black; renderList(); } }, icon('eyeoff', 16));
+      ['drops-desc', 'value-desc', 'hours-asc', 'name'].map((o) => h('option', { value: o, text: T('ord.' + o) })));
+    const blackBtn = h('button', { class: 'icon-btn', onclick: () => { q.black = !q.black; renderList(); } }, icon('eyeoff', 16));
     const count = h('span', { class: 'count' });
     const list = h('div', { class: 'list scroll' });
     const priceNote = h('div', { class: 'price-note', hidden: true });
     const queueCard = h('section', { class: 'card panel' },
-      h('div', { class: 'panel-head' }, h('h3', { text: 'Sıra' }), count, h('div', { class: 'tools' }, search, order, blackBtn)), list, priceNote);
+      h('div', { class: 'panel-head' }, h('h3', { text: T('queue.title') }), count, h('div', { class: 'tools' }, search, order, blackBtn)), list, priceNote);
 
     const logEl = h('ul', { class: 'log scroll' });
     const kv = h('div', { class: 'kv' });
     const side = h('div', { class: 'side' },
-      h('section', { class: 'card panel' }, h('div', { class: 'panel-head' }, h('h3', { text: 'Etkinlik' })), logEl),
-      h('section', { class: 'card panel' }, h('div', { class: 'panel-head' }, h('h3', { text: 'Toplamlar' })), kv));
+      h('section', { class: 'card panel' }, h('div', { class: 'panel-head' }, h('h3', { text: T('side.activity') })), logEl),
+      h('section', { class: 'card panel' }, h('div', { class: 'panel-head' }, h('h3', { text: T('side.totals') })), kv));
 
-    ui = { art, eyebrow, title, sub, chips, flow, toggle, next, auto, lastRefresh, refreshBtn, t, search, order, blackBtn, count, list, priceNote, logEl, kv, statusPill: null };
+    ui = { art, eyebrow, title, sub, chips, flow, toggle, next, auto, lastRefresh, refreshBtn, t, search, order, blackBtn, count, list, priceNote, logEl, kv };
     return h('div', { class: 'app' }, hero, head, stats, h('div', { class: 'lower' }, queueCard, side));
   }
 
@@ -317,11 +324,10 @@
     const g = e.games;
     const byId = new Map(g.map((x) => [x.appid, x]));
 
-    // durum rozeti + hero
     const status = heroStatus(state, e);
     ui.eyebrow.replaceChildren(...[h('span', { class: 'pill ' + status.tone }, h('span', { class: 'dot' }), status.label),
-      state.net === 'offline' ? h('span', { class: 'pill bad' }, h('span', { class: 'dot' }), 'Bağlantı yok') : null,
-      e.pinned ? h('span', { class: 'pill' }, 'Elle seçildi') : null].filter(Boolean));
+      state.net === 'offline' ? h('span', { class: 'pill bad' }, h('span', { class: 'dot' }), T('pill.offline')) : null,
+      e.pinned ? h('span', { class: 'pill' }, T('pill.pinned')) : null].filter(Boolean));
     ui.flow.classList.toggle('on', e.active);
 
     const idle = e.idling.map((id) => byId.get(id)).filter(Boolean);
@@ -341,10 +347,10 @@
 
     if (idle.length === 1) {
       ui.title.textContent = idle[0].name;
-      ui.sub.textContent = `${idle[0].drops} kart hakkı kaldı · ${nf.format(idle[0].hours)} saat oynama`;
+      ui.sub.textContent = T('hero.one.sub', { drops: idle[0].drops, hours: nf.format(idle[0].hours) });
     } else if (idle.length > 1) {
-      ui.title.textContent = `${idle.length} oyun eşzamanlı çalışıyor`;
-      ui.sub.textContent = `Toplam ${idle.reduce((a, x) => a + x.drops, 0)} kart hakkı bu oyunlarda`;
+      ui.title.textContent = T('hero.many.title', { n: idle.length });
+      ui.sub.textContent = T('hero.many.sub', { n: idle.reduce((a, x) => a + x.drops, 0) });
     } else {
       ui.title.textContent = status.title;
       ui.sub.textContent = status.sub;
@@ -354,34 +360,33 @@
     ui.chips.hidden = idle.length < 2;
 
     const running = e.run === 'running';
-    ui.toggle.replaceChildren(icon(running ? 'pause' : 'play', 16), running ? 'Duraklat' : (e.run === 'paused' ? 'Devam et' : 'Başlat'));
+    ui.toggle.replaceChildren(icon(running ? 'pause' : 'play', 16), running ? T('btn.pause') : (e.run === 'paused' ? T('btn.resume') : T('btn.start')));
     ui.next.disabled = e.totals.queued + e.totals.idling < 2;
     ui.auto.hidden = !e.pinned;
 
-    // sayaçlar
     ui.refreshBtn.disabled = e.refreshing;
     ui.refreshBtn.firstChild.style.animation = e.refreshing ? 'spin 1s linear infinite' : 'none';
-    const T = e.totals;
-    setVal(ui.t.drops.val, nf.format(T.drops));
-    ui.t.drops.sub.textContent = `${nf.format(T.games)} oyunda${T.completed ? ` · ${nf.format(T.completed)} oyun tamam` : ''}`;
-    setVal(ui.t.queue.val, nf.format(T.queued));
-    ui.t.queue.sub.textContent = T.idling ? `${T.idling} oyun şu an çalışıyor` : 'şu an çalışan yok';
+    const Tt = e.totals;
+    setVal(ui.t.drops.val, nf.format(Tt.drops));
+    ui.t.drops.sub.textContent = T('s.dropsSub', { n: Tt.games }) + (Tt.completed ? T('s.dropsDone', { n: nf.format(Tt.completed) }) : '');
+    setVal(ui.t.queue.val, nf.format(Tt.queued));
+    ui.t.queue.sub.textContent = Tt.idling ? T('s.queueSub', { n: Tt.idling }) : T('s.queueNone');
     setVal(ui.t.got.val, nf.format(e.session.dropped));
-    ui.t.got.sub.textContent = e.session.droppedValueText && e.session.dropped ? `≈ ${e.session.droppedValueText}` : 'henüz kart düşmedi';
-    if (T.grossText) {
-      setVal(ui.t.value.val, T.grossText);
-      ui.t.value.sub.textContent = `net ≈ ${T.netText} · ${T.priced}/${T.games} fiyatlı`;
+    ui.t.got.sub.textContent = e.session.droppedValueText && e.session.dropped ? `≈ ${e.session.droppedValueText}` : T('s.gotNone');
+    if (Tt.grossText) {
+      setVal(ui.t.value.val, Tt.grossText);
+      ui.t.value.sub.textContent = T('s.valueSub', { net: Tt.netText, p: Tt.priced, g: Tt.games });
     } else {
       setVal(ui.t.value.val, '—');
-      ui.t.value.sub.textContent = e.priceProgress.total ? `fiyatlar alınıyor (${e.priceProgress.done}/${e.priceProgress.total})` : 'fiyatlar bekleniyor';
+      ui.t.value.sub.textContent = e.priceProgress.total ? T('s.valuePrices', { d: e.priceProgress.done, t: e.priceProgress.total }) : T('s.valueWait');
     }
-    if (lastDropped != null && e.session.dropped > lastDropped) toast(`Kart düştü · bu oturumda ${e.session.dropped}`);
+    if (lastDropped != null && e.session.dropped > lastDropped) toast(T('toast.drop', { n: e.session.dropped }));
     lastDropped = e.session.dropped;
     tickClock();
 
     ui.order.value = state.settings.order;
     ui.priceNote.hidden = !(e.priceProgress.total > 0);
-    ui.priceNote.textContent = e.priceProgress.total ? `Kart fiyatları Steam Pazarı'ndan alınıyor (${e.priceProgress.done}/${e.priceProgress.total}) — hız sınırı yüzünden yavaş.` : '';
+    ui.priceNote.textContent = e.priceProgress.total ? T('price.note', { d: e.priceProgress.done, t: e.priceProgress.total }) : '';
 
     renderList();
     renderSide(e);
@@ -394,22 +399,22 @@
   }
 
   function heroStatus(state, e) {
-    if (state.net === 'offline') return { tone: 'bad', label: 'Çevrimdışı', title: 'Bağlantı bekleniyor', sub: 'Steam bağlantısı kesildi, otomatik yeniden denenecek.' };
-    if (e.run === 'running' && e.blocked) return { tone: 'warn', label: 'Beklemede', title: 'Steam\'de başka oyun açık', sub: 'Hesabında başka bir yerde oyun oynanıyor. Kapanınca otomatik devam eder.' };
-    if (e.finished) return { tone: 'ok', label: 'Tamamlandı', title: 'Tüm kartlar düştü', sub: 'Sırada kart hakkı olan oyun kalmadı.' };
-    if (e.run === 'running') return { tone: e.active ? 'ok' : 'warn', label: e.active ? 'Çalışıyor' : 'Hazırlanıyor', title: 'Kuyruk hazırlanıyor', sub: 'Rozetler okunuyor…' };
-    if (e.run === 'paused') return { tone: '', label: 'Duraklatıldı', title: 'Duraklatıldı', sub: 'Devam et\'e basınca kaldığın yerden sürer. Hesabın oyun oynuyor görünmez.' };
-    return { tone: '', label: 'Hazır', title: 'Hazır', sub: `${nf.format(e.totals.drops)} kart hakkı seni bekliyor.` };
+    if (state.net === 'offline') return { tone: 'bad', label: T('st.offline'), title: T('hs.offline.title'), sub: T('hs.offline.sub') };
+    if (e.run === 'running' && e.blocked) return { tone: 'warn', label: T('st.waiting'), title: T('hs.blocked.title'), sub: T('hs.blocked.sub') };
+    if (e.finished) return { tone: 'ok', label: T('st.done'), title: T('hs.done.title'), sub: T('hs.done.sub') };
+    if (e.run === 'running') return { tone: e.active ? 'ok' : 'warn', label: e.active ? T('st.running') : T('st.preparing'), title: T('hs.prep.title'), sub: T('hs.prep.sub') };
+    if (e.run === 'paused') return { tone: '', label: T('st.paused'), title: T('st.paused'), sub: T('hs.paused.sub') };
+    return { tone: '', label: T('st.ready'), title: T('hs.ready.title'), sub: T('hs.ready.sub', { n: nf.format(e.totals.drops) }) };
   }
 
   function tickClock() {
     if (!S || !S.engine || !ui.t) return;
     const s = S.engine.session;
-    const ms = s.activeMs + (s.runningSince ? Date.now() - s.runningSince : 0);
-    ui.t.uptime.val.textContent = clock(ms);
-    ui.t.uptime.sub.textContent = `toplam ${longDur(S.engine.lifetime.activeMs + (s.runningSince ? Date.now() - s.runningSince : 0))}`;
-    if (S.engine.lastRefresh) ui.lastRefresh.textContent = `Son yenileme ${hhmmss(S.engine.lastRefresh)}`;
-    else ui.lastRefresh.textContent = S.engine.refreshing ? 'Okunuyor…' : '';
+    const live = s.runningSince ? Date.now() - s.runningSince : 0;
+    ui.t.uptime.val.textContent = clock(s.activeMs + live);
+    ui.t.uptime.sub.textContent = T('s.uptimeSub', { t: longDur(S.engine.lifetime.activeMs + live) });
+    if (S.engine.lastRefresh) ui.lastRefresh.textContent = T('ov.last', { time: hhmmss(S.engine.lastRefresh) });
+    else ui.lastRefresh.textContent = S.engine.refreshing ? T('ov.reading') : '';
   }
   setInterval(tickClock, 1000);
 
@@ -418,23 +423,23 @@
     const all = S.engine.games;
     const needle = q.search;
     const blackCount = all.filter((x) => x.black).length;
-    let rows = all.filter((x) => (q.black ? x.black : !x.black) && (!needle || x.name.toLocaleLowerCase('tr').includes(needle)));
+    let rows = all.filter((x) => (q.black ? x.black : !x.black) && (!needle || x.name.toLocaleLowerCase(lang).includes(needle)));
     const order = S.settings.order;
     rows = rows.slice().sort((a, b) => {
-      if (order === 'name') return a.name.localeCompare(b.name, 'tr');
+      if (order === 'name') return a.name.localeCompare(b.name, lang);
       if (order === 'hours-asc') return a.hours - b.hours || b.drops - a.drops;
       if (order === 'value-desc') return (b.value ?? -1) - (a.value ?? -1) || b.drops - a.drops;
       return b.drops - a.drops || a.hours - b.hours;
     });
     ui.blackBtn.classList.toggle('on', q.black);
-    ui.blackBtn.title = q.black ? 'Sıraya dön' : `Gizlenen oyunlar (${blackCount})`;
-    ui.count.textContent = q.black ? `${rows.length} gizli oyun` : `${rows.length} oyun`;
+    ui.blackBtn.title = q.black ? T('queue.back') : T('queue.showHidden', { n: blackCount });
+    ui.count.textContent = q.black ? T('queue.countHidden', { n: rows.length }) : T('queue.count', { n: rows.length });
     const sig = JSON.stringify([rows.map((r) => [r.appid, r.drops, r.hours, r.idle, r.black, r.pinned, r.valueText]), needle, q.black]);
     if (sig === listSig) return;
     listSig = sig;
     const top = ui.list.scrollTop;
     if (!rows.length) {
-      ui.list.replaceChildren(h('div', { class: 'empty-note', text: q.black ? 'Gizlenmiş oyun yok.' : (needle ? 'Eşleşen oyun yok.' : 'Sırada kart hakkı olan oyun yok.') }));
+      ui.list.replaceChildren(h('div', { class: 'empty-note', text: q.black ? T('queue.emptyHidden') : (needle ? T('queue.emptySearch') : T('queue.empty')) }));
       return;
     }
     const frag = document.createDocumentFragment();
@@ -444,33 +449,32 @@
   }
 
   function gameRow(r) {
-    const meta = `${nf.format(r.hours)} saat oynama${r.unitText ? ` · kart ≈ ${r.unitText}` : ''}`;
+    const meta = T('row.hours', { h: nf.format(r.hours) }) + (r.unitText ? T('row.card', { p: r.unitText }) : '');
     return h('div', { class: 'row' + (r.idle ? ' idle' : '') + (r.black ? ' black' : '') },
       h('div', { class: 'thumb' }, gameImg(r.appid, 'capsule')),
       h('div', {},
-        h('div', { class: 'r-name' }, r.idle ? h('span', { class: 'live', title: 'Çalışıyor' }) : null, h('span', { text: r.name })),
+        h('div', { class: 'r-name' }, r.idle ? h('span', { class: 'live', title: T('row.live') }) : null, h('span', { text: r.name })),
         h('div', { class: 'r-meta', text: meta })),
-      h('div', { class: 'r-nums' }, h('span', { class: 'r-val num', text: r.valueText || '' }), h('span', { class: 'badge num', title: 'Kalan kart hakkı', text: r.drops })),
+      h('div', { class: 'r-nums' }, h('span', { class: 'r-val num', text: r.valueText || '' }), h('span', { class: 'badge num', title: T('row.drops'), text: r.drops })),
       h('div', { class: 'r-act' },
-        r.black ? null : h('button', { class: 'icon-btn sm', title: r.pinned ? 'Otomatiğe dön' : 'Şimdi bunu çalıştır', onclick: () => (r.pinned ? api.unpin() : api.pin(r.appid)) }, icon(r.pinned ? 'x' : 'play', 15)),
-        h('button', { class: 'icon-btn sm', title: r.black ? 'Sıraya geri al' : 'Sıradan gizle', onclick: () => api.blacklist(r.appid, !r.black) }, icon(r.black ? 'eye' : 'eyeoff', 15))));
+        r.black ? null : h('button', { class: 'icon-btn sm', title: r.pinned ? T('row.toAuto') : T('row.runNow'), onclick: () => (r.pinned ? api.unpin() : api.pin(r.appid)) }, icon(r.pinned ? 'x' : 'play', 15)),
+        h('button', { class: 'icon-btn sm', title: r.black ? T('row.unhide') : T('row.hide'), onclick: () => api.blacklist(r.appid, !r.black) }, icon(r.black ? 'eye' : 'eyeoff', 15))));
   }
 
   function renderSide(e) {
-    ui.logEl.replaceChildren(...e.logs.map((l) => h('li', { class: l.kind }, h('i'), h('span', { text: l.text }), h('time', { text: hhmm(l.t) }))));
-    if (!e.logs.length) ui.logEl.replaceChildren(h('li', {}, h('i'), h('span', { class: 'muted', text: 'Henüz etkinlik yok' }), h('time')));
+    ui.logEl.replaceChildren(...e.logs.map((l) => h('li', { class: l.kind }, h('i'), h('span', { text: T(l.key, l.params) }), h('time', { text: hhmm(l.t) }))));
+    if (!e.logs.length) ui.logEl.replaceChildren(h('li', {}, h('i'), h('span', { class: 'muted', text: T('side.none') }), h('time')));
     const kv = (a, b) => h('div', {}, h('span', { text: a }), h('span', { class: 'num', text: b }));
     ui.kv.replaceChildren(
-      kv('Toplam çalışma', longDur(e.lifetime.activeMs)),
-      kv('Toplam düşen kart', nf.format(e.lifetime.dropped)),
-      kv('Tahmini kazanç', e.lifetime.valueText && e.lifetime.dropped ? e.lifetime.valueText : '—'),
-      kv('Hesap', S.account && S.account.name ? S.account.name : '—'));
+      kv(T('tot.time'), longDur(e.lifetime.activeMs)),
+      kv(T('tot.cards'), nf.format(e.lifetime.dropped)),
+      kv(T('tot.value'), e.lifetime.valueText && e.lifetime.dropped ? e.lifetime.valueText : '—'),
+      kv(T('tot.account'), S.account && S.account.name ? S.account.name : '—'));
   }
 
   // ---- ayarlar ------------------------------------------------------------------------------------------
   let modal = null;
   function closeModal() { if (modal) { modal.remove(); modal = null; } }
-  function closeModalIfLocked(state) { if (state.phase !== 'ready') closeModal(); }
 
   function overlay(content) {
     closeModal();
@@ -481,14 +485,14 @@
 
   function confirmDialog({ title, text, ok, danger, typed }) {
     return new Promise((resolve) => {
-      const input = typed ? h('input', { type: 'text', placeholder: `Onaylamak için ${typed} yaz`, autocomplete: 'off' }) : null;
+      const input = typed ? h('input', { type: 'text', placeholder: T('confirm.type', { w: typed }), autocomplete: 'off' }) : null;
       const okBtn = h('button', { class: 'btn ' + (danger ? 'danger' : 'primary'), text: ok, disabled: !!typed });
-      if (input) input.addEventListener('input', () => { okBtn.disabled = input.value.trim() !== typed; });
+      if (input) input.addEventListener('input', () => { okBtn.disabled = input.value.trim().toUpperCase() !== typed; });
       const done = (v) => { box.remove(); resolve(v); };
       okBtn.addEventListener('click', () => done(true));
       const box = h('div', { class: 'overlay', onmousedown: (e) => { if (e.target === box) done(false); } },
         h('div', { class: 'modal confirm' }, h('h3', { text: title }), h('p', { text }), input,
-          h('div', { class: 'row-btns' }, h('button', { class: 'btn', text: 'Vazgeç', onclick: () => done(false) }), okBtn)));
+          h('div', { class: 'row-btns' }, h('button', { class: 'btn', text: T('confirm.cancel'), onclick: () => done(false) }), okBtn)));
       document.body.append(box);
       if (input) input.focus();
     });
@@ -512,51 +516,51 @@
   function openSettings() {
     const st = S && S.settings;
     if (!st) return;
-    const themeSeg = h('div', { class: 'seg' }, [['system', 'Sistem'], ['dark', 'Koyu'], ['light', 'Açık']].map(([v, t]) =>
-      h('button', { class: st.theme === v ? 'on' : '', text: t, onclick: (e) => { api.setSettings({ theme: v }); e.target.parentNode.querySelectorAll('button').forEach((b) => b.classList.remove('on')); e.target.classList.add('on'); } })));
+    const themeSeg = h('div', { class: 'seg' }, ['system', 'dark', 'light'].map((v) =>
+      h('button', { class: st.theme === v ? 'on' : '', text: T('theme.' + v), onclick: (e) => { api.setSettings({ theme: v }); e.target.parentNode.querySelectorAll('button').forEach((b) => b.classList.remove('on')); e.target.classList.add('on'); } })));
+    const langSel = h('select', { onchange: (e) => api.setLanguage(e.target.value) },
+      [h('option', { value: 'auto', text: T('lang.auto') }), ...I18N.LANGS.map((l) => h('option', { value: l, text: I18N.NAMES[l] }))]);
+    langSel.value = st.language || 'auto';
 
     const pwForm = h('div', { class: 'subform', hidden: true });
-    const o = h('input', { type: 'password', placeholder: 'Mevcut parola', autocomplete: 'off', maxlength: 128 });
-    const n1 = h('input', { type: 'password', placeholder: 'Yeni parola', autocomplete: 'off', maxlength: 128 });
-    const n2 = h('input', { type: 'password', placeholder: 'Yeni parola (tekrar)', autocomplete: 'off', maxlength: 128 });
+    const o = h('input', { type: 'password', placeholder: T('pw.old'), autocomplete: 'off', maxlength: 128 });
+    const n1 = h('input', { type: 'password', placeholder: T('pw.new'), autocomplete: 'off', maxlength: 128 });
+    const n2 = h('input', { type: 'password', placeholder: T('pw.newRepeat'), autocomplete: 'off', maxlength: 128 });
     const pwErr = h('div', { class: 'err' });
-    const pwSave = h('button', { class: 'btn primary sm', text: 'Parolayı güncelle', onclick: async () => {
+    const pwSave = h('button', { class: 'btn primary sm', text: T('pw.update'), onclick: async () => {
       pwErr.textContent = '';
-      if (n1.value !== n2.value) { pwErr.textContent = 'Yeni parolalar aynı değil.'; return; }
+      if (n1.value !== n2.value) { pwErr.textContent = T('pw.mismatch'); return; }
       const r = await api.changePassphrase(o.value, n1.value);
-      if (r.ok) { closeModal(); toast('Parola güncellendi'); } else pwErr.textContent = r.message || (r.code === 'WRONG' ? `Mevcut parola yanlış (kalan: ${r.left})` : r.code === 'LOCKED' ? 'Bir süre bekle.' : 'Başarısız.');
+      if (r.ok) { closeModal(); toast(T('pw.updated')); }
+      else pwErr.textContent = r.messageKey ? T(r.messageKey) : (r.code === 'WRONG' ? T('pw.wrongOld', { n: r.left }) : r.code === 'LOCKED' ? T('pw.wait') : T('pw.fail'));
     } });
     pwForm.append(o, n1, n2, pwErr, pwSave);
 
+    const mins = (arr) => arr.map((n) => [n, T('min.n', { n })]);
     const body = h('div', { class: 'modal-body scroll' },
-      h('h4', { text: 'Görünüm' }), setRow('Tema', null, themeSeg),
-      h('h4', { text: 'Çalışma' }),
-      setRow('Eşzamanlı oyun', 'Akıllı: 2 saatin altındakiler birlikte, sonra tek tek.', sel('concurrency', st.concurrency, [['smart', 'Akıllı (önerilen)'], ['1', '1 oyun'], ['2', '2 oyun'], ['4', '4 oyun'], ['8', '8 oyun'], ['16', '16 oyun'], ['32', '32 oyun']])),
-      setRow('Kuyruk sırası', null, sel('order', st.order, [['drops-desc', 'En çok kart'], ['value-desc', 'En değerli'], ['hours-asc', 'En az saat'], ['name', 'Ada göre']])),
-      setRow('Otomatik yenileme', 'Rozetler bu aralıkla okunur.', sel('refreshMinutes', st.refreshMinutes, [[2, '2 dakika'], [5, '5 dakika'], [10, '10 dakika'], [15, '15 dakika'], [30, '30 dakika']])),
-      setRow('Girişte otomatik başlat', null, sw('autoStart', st.autoStart)),
-      setRow('Çalışırken bilgisayarı uyanık tut', null, sw('keepAwake', st.keepAwake)),
-      setRow('Pencereyi kapatınca tepsiye küçül', 'Çalışırken kapatırsan arka planda sürer ve kilitlenir.', sw('closeToTray', st.closeToTray)),
-      h('h4', { text: 'Güvenlik' }),
-      setRow('Otomatik kilit', 'Hareketsiz kalınca arayüz parolayla kilitlenir.', sel('lockMinutes', st.lockMinutes, [[0, 'Kapalı'], [2, '2 dakika'], [5, '5 dakika'], [10, '10 dakika'], [30, '30 dakika'], [60, '1 saat']])),
-      setRow('Kasa parolası', null, h('button', { class: 'btn sm', text: 'Değiştir', onclick: () => { pwForm.hidden = !pwForm.hidden; } })),
+      h('h4', { text: T('set.appearance') }), setRow(T('set.theme'), null, themeSeg), setRow(T('set.language'), null, langSel),
+      h('h4', { text: T('set.work') }),
+      setRow(T('set.concurrency'), T('set.concurrencyHint'), sel('concurrency', st.concurrency, [['smart', T('conc.smart')], ...[1, 2, 4, 8, 16, 32].map((n) => [String(n), T('conc.n', { n })])])),
+      setRow(T('set.order'), null, sel('order', st.order, ['drops-desc', 'value-desc', 'hours-asc', 'name'].map((o2) => [o2, T('ord.' + o2)]))),
+      setRow(T('set.refresh'), T('set.refreshHint'), sel('refreshMinutes', st.refreshMinutes, mins([2, 5, 10, 15, 30]))),
+      setRow(T('set.autostart'), null, sw('autoStart', st.autoStart)),
+      setRow(T('set.keepawake'), null, sw('keepAwake', st.keepAwake)),
+      setRow(T('set.tray'), T('set.trayHint'), sw('closeToTray', st.closeToTray)),
+      h('h4', { text: T('set.security') }),
+      setRow(T('set.autolock'), T('set.autolockHint'), sel('lockMinutes', st.lockMinutes, [[0, T('lock.off')], ...mins([2, 5, 10, 30]), [60, T('lock.hour')]])),
+      setRow(T('set.passphrase'), null, h('button', { class: 'btn sm', text: T('btn.change'), onclick: () => { pwForm.hidden = !pwForm.hidden; } })),
       pwForm,
-      setRow('Steam oturumunu kapat', 'Kayıtlı Steam anahtarını siler; yeniden QR gerekir.', h('button', { class: 'btn sm danger', text: 'Oturumu kapat', onclick: async () => {
-        if (await confirmDialog({ title: 'Oturumu kapat', text: 'Kayıtlı Steam anahtarı silinecek ve çalışma duracak. Tekrar QR ile giriş yapman gerekir.', ok: 'Oturumu kapat', danger: true })) { closeModal(); api.logout(); }
+      setRow(T('set.logout'), T('set.logoutHint'), h('button', { class: 'btn sm danger', text: T('btn.logout'), onclick: async () => {
+        if (await confirmDialog({ title: T('confirm.logout.title'), text: T('confirm.logout.text'), ok: T('btn.logout'), danger: true })) { closeModal(); api.logout(); }
       } })),
-      setRow('Tüm yerel verileri sil', 'Kasa, ayarlar, istatistik ve önbellek.', h('button', { class: 'btn sm danger', text: 'Hepsini sil', onclick: async () => {
-        if (await confirmDialog({ title: 'Tüm yerel veriler silinsin mi?', text: 'Parola kasası dahil her şey silinir. Bu işlem geri alınamaz.', ok: 'Sil', danger: true, typed: 'SIL' })) { closeModal(); api.wipe('SIL'); }
+      setRow(T('set.wipe'), T('set.wipeHint'), h('button', { class: 'btn sm danger', text: T('btn.wipeAll'), onclick: async () => {
+        if (await confirmDialog({ title: T('confirm.wipe.title'), text: T('confirm.wipe.text'), ok: T('confirm.wipe.ok'), danger: true, typed: I18N.CONFIRM_WORD[lang] })) { closeModal(); api.wipe('SIL'); }
       } })),
-      h('h4', { text: 'Bu uygulama nasıl korunuyor' }),
-      h('ul', { class: 'sec-list' },
-        h('li', { text: 'Steam parolan hiç alınmaz; giriş QR ile yapılır.' }),
-        h('li', { text: 'Oturum anahtarı parolandan türetilen AES-256 anahtarıyla şifrelenir, üstüne Windows DPAPI uygulanır.' }),
-        h('li', { text: 'Yanlış parola denemeleri yavaşlatılır; 10 hatada kasa silinir.' }),
-        h('li', { text: 'Arayüz internete çıkamaz; ağ trafiği yalnızca izinli Steam adreslerine gider.' }),
-        h('li', { text: 'Telemetri, reklam, dış sunucu ya da açık port yok. Hesap bilgin başka yere gönderilmez.' })));
+      h('h4', { text: T('set.how') }),
+      h('ul', { class: 'sec-list' }, [1, 2, 3, 4, 5].map((n) => h('li', { text: T('how.' + n) }))));
 
     overlay(h('div', { class: 'modal' },
-      h('div', { class: 'modal-head' }, h('h3', { text: 'Ayarlar' }), h('button', { class: 'icon-btn', onclick: closeModal }, icon('x', 18))), body));
+      h('div', { class: 'modal-head' }, h('h3', { text: T('set.title') }), h('button', { class: 'icon-btn', onclick: closeModal }, icon('x', 18))), body));
   }
 
   // ---- giriş noktası ---------------------------------------------------------------------------------------

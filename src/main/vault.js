@@ -16,15 +16,15 @@ const MAX_FAILS = 10;
 
 const COMMON = new Set(['12345678', '123456789', '1234567890', 'password', 'password1', 'qwertyui', 'qwerty123', '11111111', '00000000', 'iloveyou', 'abcd1234', '87654321', 'asdfghjk']);
 
-/** @returns {string|null} hata mesajı ya da null */
+/** @returns {string|null} çeviri anahtarı (hata) ya da null */
 function checkPassphrase(p) {
-  if (typeof p !== 'string') return 'Geçersiz parola.';
-  if (p.length < 8) return 'Parola en az 8 karakter olmalı.';
-  if (p.length > 128) return 'Parola en fazla 128 karakter olabilir.';
-  if (COMMON.has(p.toLowerCase())) return 'Bu parola çok yaygın, başka bir tane seç.';
-  if (/^(.)\1+$/.test(p)) return 'Parola tek karakterden oluşamaz.';
+  if (typeof p !== 'string') return 'pw.invalid';
+  if (p.length < 8) return 'pw.short';
+  if (p.length > 128) return 'pw.long';
+  if (COMMON.has(p.toLowerCase())) return 'pw.common';
+  if (/^(.)\1+$/.test(p)) return 'pw.same';
   const classes = [/[a-zçğıöşü]/, /[A-ZÇĞİÖŞÜ]/, /\d/, /[^A-Za-z0-9çğıöşüÇĞİÖŞÜ]/].filter((r) => r.test(p)).length;
-  if (p.length < 12 && classes < 2) return 'Kısa parolada en az iki tür karakter kullan (harf + rakam gibi) ya da 12+ karakter yaz.';
+  if (p.length < 12 && classes < 2) return 'pw.weak';
   return null;
 }
 
@@ -190,7 +190,7 @@ class Vault {
 
   async changePassphrase(oldPass, newPass) {
     const err = checkPassphrase(newPass);
-    if (err) return { ok: false, code: 'WEAK', message: err };
+    if (err) return { ok: false, code: 'WEAK', messageKey: err };
     const v = await this.verify(oldPass);
     if (!v.ok) return v;
     const secrets = this._open(this._read());

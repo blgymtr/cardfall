@@ -3,6 +3,7 @@
 const path = require('path');
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, nativeTheme, powerMonitor, powerSaveBlocker, safeStorage, Notification } = require('electron');
 const security = require('./security');
+const I18N = require('../renderer/i18n');
 
 app.setName('Cardfall');
 app.setAppUserModelId('com.omer.cardfall');
@@ -105,13 +106,14 @@ function boot() {
     const sum = controller.summary();
     if (tray) {
       const running = sum.run === 'running';
-      tray.setToolTip(running ? `Cardfall — ${sum.active ? `${sum.idling} oyun çalışıyor` : 'bekliyor'}` : 'Cardfall — duraklatıldı');
+      const T = (k, p) => controller.t(k, p);
+      tray.setToolTip(running ? (sum.active ? T('tray.running', { n: sum.idling }) : T('tray.waiting')) : T('tray.paused'));
       tray.setContextMenu(Menu.buildFromTemplate([
-        { label: 'Cardfall\'ı aç', click: showWindow },
-        { label: running ? 'Duraklat' : 'Devam et', enabled: sum.phase === 'ready' || sum.phase === 'locked', click: () => controller.engine.toggle() },
-        { label: 'Kilitle', click: () => controller.lock() },
+        { label: T('tray.open'), click: showWindow },
+        { label: running ? T('tray.pause') : T('tray.resume'), enabled: sum.phase === 'ready' || sum.phase === 'locked', click: () => controller.engine.toggle() },
+        { label: T('tray.lock'), click: () => controller.lock() },
         { type: 'separator' },
-        { label: 'Çıkış', click: () => app.quit() },
+        { label: T('tray.quit'), click: () => app.quit() },
       ]));
     }
     // uyku engeli
@@ -145,10 +147,11 @@ function boot() {
 
   function registerIpc() {
     handle('state:get', () => ({ ok: true, state: controller.publicState() }));
-    handle('auth:setup', (pass) => (isStr(pass, 128) ? controller.setup(pass) : { ok: false, message: 'Geçersiz parola' }));
+    handle('auth:setup', (pass) => (isStr(pass, 128) ? controller.setup(pass) : { ok: false, messageKey: 'pw.invalid' }));
     handle('auth:unlock', (pass) => (isStr(pass, 128) ? controller.unlock(pass) : { ok: false, code: 'WRONG' }));
     handle('auth:lock', () => controller.lock());
-    handle('auth:change', (a, b) => (isStr(a, 128) && isStr(b, 128) ? controller.changePassphrase(a, b) : { ok: false, message: 'Geçersiz' }), { needReady: true });
+    handle('lang:set', (l) => { if (['auto', ...I18N.LANGS].includes(l)) controller.setLanguage(l); });
+    handle('auth:change', (a, b) => (isStr(a, 128) && isStr(b, 128) ? controller.changePassphrase(a, b) : { ok: false, messageKey: 'pw.invalid' }), { needReady: true });
     handle('login:start', () => { if (controller.phase() === 'login') controller.startLogin(); });
     handle('account:logout', () => controller.logout(), { needReady: true });
     handle('account:wipe', (word) => { if (word !== 'SIL') return { ok: false, error: 'confirm' }; controller.wipeEverything(); });
@@ -176,6 +179,7 @@ function boot() {
       dir,
       demo: DEMO,
       version: app.getVersion(),
+      locale: app.getLocale(),
       safe: {
         isAvailable: () => safeStorage.isEncryptionAvailable(),
         encrypt: (s) => safeStorage.encryptString(s),
@@ -187,7 +191,7 @@ function boot() {
     controller.on('state', pushState);
     controller.engine.on('drop', ({ name, n }) => {
       if (win && win.isVisible() && win.isFocused()) return;
-      if (Notification.isSupported()) new Notification({ title: 'Kart düştü', body: `${name}: +${n}`, silent: true }).show();
+      if (Notification.isSupported()) new Notification({ title: controller.t('notif.title'), body: `${name}: +${n}`, silent: true }).show();
     });
 
     registerIpc();

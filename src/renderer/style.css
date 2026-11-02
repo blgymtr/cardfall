@@ -272,3 +272,7 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px c
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 .gate-card > .btn.sm { margin-top: 14px; }
+
+.lang-sel { width: auto; height: 28px; font-size: 12px; padding: 0 24px 0 10px; border-radius: 9px; background-color: transparent; border-color: var(--line); background-position: calc(100% - 13px) 11px, calc(100% - 8px) 11px; -webkit-app-region: no-drag; }
+.lang-sel:hover { background-color: var(--panel-2); }
+.set select { width: 200px; }

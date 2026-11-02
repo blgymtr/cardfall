@@ -83,7 +83,7 @@ class SteamBackend extends EventEmitter {
       this.loggedOn = false;
       const code = err && err.eresult;
       const dead = TOKEN_DEAD.has(code) || /refresh token|token.*(invalid|expired)/i.test((err && err.message) || '');
-      this.emit('failed', { tokenDead: dead, message: (err && err.message) || 'Bağlantı hatası', eresult: code });
+      this.emit('failed', { tokenDead: dead, message: (err && err.message) || 'Connection error', eresult: code });
     });
     client.logOn({ refreshToken });
   }
@@ -112,8 +112,8 @@ class SteamBackend extends EventEmitter {
   _ensureWeb(force) {
     if (!force && this.cookieHeader && Date.now() - this.cookieAt < WEB_TTL) return Promise.resolve();
     return new Promise((resolve, reject) => {
-      if (!this.client || !this.loggedOn) return reject(new http.HttpError('OFFLINE', 'Steam bağlantısı yok'));
-      const t = setTimeout(() => { this.off('web', ok); reject(new http.HttpError('WEB', 'Web oturumu alınamadı')); }, 25000);
+      if (!this.client || !this.loggedOn) return reject(new http.HttpError('OFFLINE', 'No Steam connection'));
+      const t = setTimeout(() => { this.off('web', ok); reject(new http.HttpError('WEB', 'Could not get a web session')); }, 25000);
       const ok = () => { clearTimeout(t); resolve(); };
       this.once('web', ok);
       try { this.client.webLogOn(); } catch (e) { clearTimeout(t); this.off('web', ok); reject(e); }

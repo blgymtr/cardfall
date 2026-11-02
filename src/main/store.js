@@ -6,6 +6,7 @@ const path = require('path');
 
 const DEFAULT_SETTINGS = {
   theme: 'system',          // system | dark | light
+  language: 'auto',         // auto | tr | en | de
   refreshMinutes: 5,
   concurrency: 'smart',     // smart | 1..32
   order: 'drops-desc',      // drops-desc | hours-asc | name | value-desc
@@ -18,6 +19,7 @@ const DEFAULT_SETTINGS = {
 
 const ORDERS = ['drops-desc', 'hours-asc', 'name', 'value-desc'];
 const THEMES = ['system', 'dark', 'light'];
+const LANGUAGES = ['auto', 'tr', 'en', 'de'];
 
 function clampInt(v, lo, hi, fallback) {
   const n = Math.round(Number(v));
@@ -29,6 +31,7 @@ function sanitizeSettings(input, base = DEFAULT_SETTINGS) {
   const out = { ...base };
   if (!input || typeof input !== 'object') return out;
   if (THEMES.includes(input.theme)) out.theme = input.theme;
+  if (LANGUAGES.includes(input.language)) out.language = input.language;
   if ('refreshMinutes' in input) out.refreshMinutes = clampInt(input.refreshMinutes, 2, 60, base.refreshMinutes);
   if ('concurrency' in input) {
     out.concurrency = input.concurrency === 'smart' ? 'smart' : String(clampInt(input.concurrency, 1, 32, 1));
