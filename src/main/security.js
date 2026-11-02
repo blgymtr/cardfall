@@ -23,6 +23,7 @@ const CSP = [
   "base-uri 'none'",
   "form-action 'none'",
   "frame-ancestors 'none'",
+  "require-trusted-types-for 'script'",
 ].join('; ');
 
 const MIME = {
@@ -44,6 +45,9 @@ function baseHeaders(type) {
     'X-Content-Type-Options': 'nosniff',
     'Cross-Origin-Opener-Policy': 'same-origin',
     'Cross-Origin-Resource-Policy': 'same-origin',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=(), clipboard-read=(), display-capture=()',
+    'X-Frame-Options': 'DENY',
   };
 }
 
@@ -63,8 +67,15 @@ async function serveUi(pathname) {
 }
 
 // ---- oyun görselleri ---------------------------------------------------------------------
-const VARIANTS = { capsule: 'capsule_231x87.jpg', header: 'header.jpg' };
+// Önce bilinen CDN adresleri denenir, olmazsa mağaza bilgisindeki (güncel) başlık görseli kullanılır.
+// Önbellekteki dosya 7 günden eskiyse görsel gösterilirken arka planda yenilenir.
+const FILES = {
+  capsule: ['capsule_231x87.jpg', 'capsule_184x69.jpg', 'header.jpg'],
+  header: ['header.jpg', 'capsule_616x353.jpg', 'capsule_231x87.jpg'],
+};
+const IMAGE_TTL = 7 * 24 * 3600 * 1000;
 const failed = new Map(); // anahtar -> zaman (kısa süreli olumsuz önbellek)
+const refreshing = new Set();
 
 function looksLikeImage(buf) {
   if (buf.length < 16 || buf.length > 1_500_000) return null;
@@ -73,39 +84,67 @@ function looksLikeImage(buf) {
   return null;
 }
 
-async function serveImage(pathname, { cacheDir, offline }) {
+async function tryFetch(url) {
+  try {
+    const buf = await http.get(url, { hosts: http.IMAGE_HOSTS, binary: true, maxBytes: 1_500_000, timeoutMs: 12000 });
+    const type = looksLikeImage(buf);
+    return type ? { buf, type } : null;
+  } catch { return null; }
+}
+
+async function fetchImage(appid, variant, resolveHeader) {
+  for (const f of FILES[variant]) {
+    const r = await tryFetch(`https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/${f}`);
+    if (r) return r;
+  }
+  if (resolveHeader) {
+    try {
+      const url = await resolveHeader(appid);
+      if (url && http.isAllowedUrl(url, http.IMAGE_HOSTS)) return await tryFetch(url);
+    } catch { /* yok say */ }
+  }
+  return null;
+}
+
+async function serveImage(pathname, { cacheDir, offline, resolveHeader }) {
   const m = /^\/(\d{1,10})\/(capsule|header)$/.exec(pathname);
   if (!m) return notFound();
   const [, appid, variant] = m;
   const key = `${appid}_${variant}`;
   const file = path.join(cacheDir, `${key}.img`);
   const headers = (type) => ({ 'Content-Type': type, 'Cache-Control': 'max-age=86400', 'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'same-origin' });
+  const store = async (r) => {
+    try { await fs.promises.mkdir(cacheDir, { recursive: true }); await fs.promises.writeFile(file, r.buf); } catch { /* yok say */ }
+  };
   try {
     const cached = await fs.promises.readFile(file);
     const type = looksLikeImage(cached);
-    if (type) return new Response(cached, { headers: headers(type) });
+    if (type) {
+      if (!offline && !refreshing.has(key)) {
+        const age = Date.now() - (await fs.promises.stat(file)).mtimeMs;
+        if (age > IMAGE_TTL) {
+          refreshing.add(key);
+          fetchImage(appid, variant, resolveHeader).then((r) => (r ? store(r) : fs.promises.utimes(file, new Date(), new Date()).catch(() => {}))).finally(() => refreshing.delete(key));
+        }
+      }
+      return new Response(cached, { headers: headers(type) });
+    }
   } catch { /* önbellekte yok */ }
   if (offline) return notFound();
   const t = failed.get(key);
   if (t && Date.now() - t < 10 * 60 * 1000) return notFound();
-  try {
-    const buf = await http.get(`https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/${VARIANTS[variant]}`, { hosts: http.IMAGE_HOSTS, binary: true, maxBytes: 1_500_000, timeoutMs: 12000 });
-    const type = looksLikeImage(buf);
-    if (!type) throw new Error('not an image');
-    fs.promises.mkdir(cacheDir, { recursive: true }).then(() => fs.promises.writeFile(file, buf)).catch(() => {});
-    return new Response(buf, { headers: headers(type) });
-  } catch {
-    failed.set(key, Date.now());
-    return notFound();
-  }
+  const r = await fetchImage(appid, variant, resolveHeader);
+  if (!r) { failed.set(key, Date.now()); return notFound(); }
+  store(r);
+  return new Response(r.buf, { headers: headers(r.type) });
 }
 
-function setupProtocol({ cacheDir, offline }) {
+function setupProtocol({ cacheDir, offline, resolveHeader }) {
   protocol.handle(SCHEME, async (request) => {
     let url;
     try { url = new URL(request.url); } catch { return notFound(); }
     if (url.host === 'ui') return serveUi(url.pathname);
-    if (url.host === 'img') return serveImage(url.pathname, { cacheDir, offline });
+    if (url.host === 'img') return serveImage(url.pathname, { cacheDir, offline, resolveHeader });
     return notFound();
   });
 }

@@ -1,9 +1,14 @@
 'use strict';
 
 const path = require('path');
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, nativeTheme, powerMonitor, powerSaveBlocker, safeStorage, Notification } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, nativeTheme, powerMonitor, powerSaveBlocker, safeStorage, Notification, shell } = require('electron');
 const security = require('./security');
 const I18N = require('../renderer/i18n');
+
+// Ortam değişkenleriyle TLS doğrulamasını kapatma girişimini etkisiz kıl.
+delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+process.on('uncaughtException', (e) => { console.error('uncaught:', e && e.message); });
+process.on('unhandledRejection', (e) => { console.error('unhandled:', e && e.message); });
 
 app.setName('Cardfall');
 app.setAppUserModelId('com.omer.cardfall');
@@ -12,6 +17,7 @@ security.registerScheme();
 // Test/geliştirme kancaları yalnızca paketlenmemiş sürümde çalışır.
 const DEV = !app.isPackaged;
 const DEMO = DEV && process.env.CARDFALL_DEMO === '1';
+const START_HIDDEN = process.argv.includes('--hidden');
 if (DEV && process.env.CARDFALL_USER_DATA) app.setPath('userData', path.resolve(process.env.CARDFALL_USER_DATA));
 
 if (!app.requestSingleInstanceLock()) { app.quit(); } else { boot(); }
@@ -24,6 +30,10 @@ function boot() {
   let lastActivity = Date.now();
   let sleepBlock = null;
   let pushTimer = null;
+  let loginItem = null;
+  let hiddenShown = false;
+  let capture = null;
+  const calls = [];
 
   const ICON = path.join(__dirname, '..', '..', 'build', 'icon.png');
   const COLORS = {
@@ -62,7 +72,9 @@ function boot() {
       },
     });
     win.removeMenu();
-    win.once('ready-to-show', () => win.show());
+    win.setContentProtection(!!controller.store.settings.hideFromCapture);
+    win.once('ready-to-show', () => { if (!START_HIDDEN || hiddenShown) win.show(); });
+    win.on('minimize', () => { if (controller.store.settings.lockOnMinimize) controller.lock(); });
     win.loadURL(security.UI_ORIGIN + 'index.html');
     win.on('close', (e) => {
       if (quitting) return;
@@ -79,6 +91,7 @@ function boot() {
   }
 
   function showWindow() {
+    hiddenShown = true;
     if (!win) createWindow();
     if (win.isMinimized()) win.restore();
     win.show();
@@ -107,7 +120,7 @@ function boot() {
     if (tray) {
       const running = sum.run === 'running';
       const T = (k, p) => controller.t(k, p);
-      tray.setToolTip(running ? (sum.active ? T('tray.running', { n: sum.idling }) : T('tray.waiting')) : T('tray.paused'));
+      tray.setToolTip(running ? (sum.active ? T('tray.running', { n: sum.idling }) : T('tray.waiting')) : (sum.phase === 'ready' ? T('tray.paused') : T('tray.locked')));
       tray.setContextMenu(Menu.buildFromTemplate([
         { label: T('tray.open'), click: showWindow },
         { label: running ? T('tray.pause') : T('tray.resume'), enabled: sum.phase === 'ready' || sum.phase === 'locked', click: () => controller.engine.toggle() },
@@ -120,6 +133,16 @@ function boot() {
     const want = controller.store.settings.keepAwake && sum.run === 'running';
     if (want && sleepBlock == null) sleepBlock = powerSaveBlocker.start('prevent-app-suspension');
     if (!want && sleepBlock != null) { powerSaveBlocker.stop(sleepBlock); sleepBlock = null; }
+    // Windows ile başlat (gizli) ve ekran yakalama koruması
+    const s = controller.store.settings;
+    if (app.isPackaged && loginItem !== s.launchAtLogin) {
+      loginItem = s.launchAtLogin;
+      try { app.setLoginItemSettings({ openAtLogin: s.launchAtLogin, args: ['--hidden'] }); } catch { /* yok say */ }
+    }
+    if (capture !== s.hideFromCapture && win && !win.isDestroyed()) {
+      capture = s.hideFromCapture;
+      try { win.setContentProtection(!!capture); } catch { /* yok say */ }
+    }
     // tema
     const theme = controller.store.settings.theme;
     if (nativeTheme.themeSource !== theme) nativeTheme.themeSource = theme;
@@ -132,9 +155,19 @@ function boot() {
   const isStr = (v, max = 256) => typeof v === 'string' && v.length <= max;
   const isId = (v) => Number.isInteger(v) && v > 0 && v < 2 ** 31;
 
+  // Saniyede en çok 50 çağrı: ele geçirilmiş bir arayüz bile ana süreci yoğun çağrıyla boğamaz.
+  function allowCall() {
+    const now = Date.now();
+    while (calls.length && now - calls[0] > 1000) calls.shift();
+    if (calls.length >= 50) return false;
+    calls.push(now);
+    return true;
+  }
+
   function handle(channel, fn, { needReady = false } = {}) {
     ipcMain.handle(channel, async (event, ...args) => {
       if (!security.trustedSender(event, win)) return { ok: false, error: 'forbidden' };
+      if (!allowCall()) return { ok: false, error: 'rate' };
       if (needReady && controller.phase() !== 'ready') return { ok: false, error: 'not-ready' };
       try {
         const r = await fn(...args);
@@ -153,6 +186,20 @@ function boot() {
     handle('lang:set', (l) => { if (['auto', ...I18N.LANGS].includes(l)) controller.setLanguage(l); });
     handle('auth:change', (a, b) => (isStr(a, 128) && isStr(b, 128) ? controller.changePassphrase(a, b) : { ok: false, messageKey: 'pw.invalid' }), { needReady: true });
     handle('login:start', () => { if (controller.phase() === 'login') controller.startLogin(); });
+    handle('stats:get', () => ({ ok: true, stats: controller.statistics() }), { needReady: true });
+    handle('stats:reset', () => controller.resetStatistics(), { needReady: true });
+    handle('session:get', () => ({ ok: true, session: controller.sessionInfo() }), { needReady: true });
+    handle('data:info', () => ({ ok: true, data: controller.dataInfo() }), { needReady: true });
+    handle('data:clear', (kind) => {
+      if (kind === 'log') controller.clearLog();
+      else if (kind === 'history') controller.clearHistory();
+      else if (kind === 'cache') controller.clearCache();
+      else return { ok: false, error: 'bad-kind' };
+      return { ok: true };
+    }, { needReady: true });
+    handle('account:logoutFull', () => controller.logoutFull(), { needReady: true });
+    handle('info:get', async (id) => (isId(id) ? { ok: true, info: await controller.gameInfo(id) } : { ok: false, error: 'bad-id' }), { needReady: true });
+    handle('app:openStore', (id) => { if (!isId(id)) return { ok: false, error: 'bad-id' }; shell.openExternal(`https://store.steampowered.com/app/${id}/`); }, { needReady: true });
     handle('account:logout', () => controller.logout(), { needReady: true });
     handle('account:wipe', (word) => { if (word !== 'SIL') return { ok: false, error: 'confirm' }; controller.wipeEverything(); });
     handle('farm:toggle', () => controller.engine.toggle(), { needReady: true });
@@ -173,7 +220,6 @@ function boot() {
     const { Controller } = require('./controller');
     const dir = app.getPath('userData');
     security.hardenSession();
-    security.setupProtocol({ cacheDir: path.join(dir, 'imgcache'), offline: DEMO });
 
     controller = new Controller({
       dir,
@@ -187,6 +233,7 @@ function boot() {
       },
     });
     nativeTheme.themeSource = controller.store.settings.theme;
+    security.setupProtocol({ cacheDir: controller.store.cacheDir, offline: DEMO, resolveHeader: (id) => controller.appinfo.headerUrl(id) });
 
     controller.on('state', pushState);
     controller.engine.on('drop', ({ name, n }) => {
@@ -197,6 +244,11 @@ function boot() {
     registerIpc();
     createWindow();
     buildTray();
+    if (START_HIDDEN && Notification.isSupported()) {
+      const n = new Notification({ title: controller.t('notif.waitTitle'), body: controller.t('notif.waitBody'), silent: true });
+      n.on('click', showWindow);
+      n.show();
+    }
 
     // otomatik kilit
     setInterval(() => {

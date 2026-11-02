@@ -8,6 +8,7 @@ const { Store } = require('./store');
 const { Vault, checkPassphrase } = require('./vault');
 const { Engine } = require('./engine');
 const { PriceService } = require('./prices');
+const { AppInfo } = require('./appinfo');
 const I18N = require('../renderer/i18n');
 
 class Controller extends EventEmitter {
@@ -20,7 +21,8 @@ class Controller extends EventEmitter {
     this.dir = dir;
     this.demo = demo;
     this.version = version;
-    this.store = new Store(dir);
+    this.startedAt = Date.now();
+    this.store = new Store(dir, safe);
     this.vault = new Vault({ dir, safe });
 
     if (demo) {
@@ -32,6 +34,7 @@ class Controller extends EventEmitter {
       this.backend = new SteamBackend();
       this.prices = new PriceService({ store: this.store, getCookies: () => this.backend.getCookies() });
     }
+    this.appinfo = new AppInfo({ store: this.store, offline: demo });
     this.engine = new Engine({ backend: this.backend, prices: this.prices, store: this.store });
 
     this.uiLocked = true;
@@ -43,6 +46,9 @@ class Controller extends EventEmitter {
     this.notice = null;
     this.connectError = null;
     this.firstLogon = true;
+    this.signedInAt = null;
+    this.connectedAt = null;
+    this._pendingSecrets = null;  // kasa kilitliyken gelen yeni anahtar; kilit açılınca yazılır
 
     this._wire();
     this.engine.on('change', () => this.emitState());
@@ -76,7 +82,7 @@ class Controller extends EventEmitter {
       lang: this.lang(),
       lock: this.vault.lockStatus(),
       notice: this.notice,
-      sessionAlive: this.vault.hasKey() && this._phase !== 'login',
+      appStartedAt: this.startedAt,
       farming: this.engine.run === 'running',
     };
     if (phase === 'login') out.qr = this.qr;
@@ -115,16 +121,18 @@ class Controller extends EventEmitter {
     b.on('qrDone', async ({ refreshToken, accountName }) => {
       this.token = refreshToken;
       if (accountName) this.account = { name: accountName };
-      try { await this.vault.saveSecrets({ refreshToken, accountName: accountName || '' }); } catch { /* kasa yazılamazsa oturum yine de çalışır */ }
+      await this._persist({ refreshToken, accountName: accountName || '' });
       this._connect();
     });
     b.on('account', (name) => { if (name) { this.account = { name }; this.emitState(); } });
     b.on('refreshToken', async (t) => {
       this.token = t;
-      try { await this.vault.saveSecrets({ refreshToken: t, accountName: this.account.name }); } catch { /* yok say */ }
+      await this._persist({ refreshToken: t, accountName: this.account.name });
     });
     b.on('loggedOn', () => {
       this.net = 'online';
+      this.connectedAt = Date.now();
+      if (!this.signedInAt) this.signedInAt = this.connectedAt;
       this.connectError = null;
       this._phase = 'ready';
       if (this.firstLogon) {
@@ -148,7 +156,7 @@ class Controller extends EventEmitter {
       if (tokenDead) {
         this.engine.pause();
         this.token = null;
-        try { await this.vault.saveSecrets({}); } catch { /* yok say */ }
+        await this._persist({});
         this.notice = 'notice.expired';
         this.startLogin();
       } else {
@@ -159,6 +167,13 @@ class Controller extends EventEmitter {
         this.emitState();
       }
     });
+  }
+
+  /** Kasa açıksa hemen yazar; kilitliyse (anahtar bellekte yok) kilit açılınca yazmak üzere bekletir. */
+  async _persist(secrets) {
+    if (!this.vault.exists()) return;
+    if (!this.vault.hasKey()) { this._pendingSecrets = secrets; return; }
+    try { await this.vault.saveSecrets(secrets); } catch { /* kasa yazılamazsa oturum yine de çalışır */ }
   }
 
   _connect() {
@@ -190,19 +205,25 @@ class Controller extends EventEmitter {
 
   async unlock(pass) {
     if (!this.vault.exists()) return { ok: false, code: 'NOVAULT' };
-    const alive = this.vault.hasKey() && this._phase !== 'login';
-    if (alive) {
-      const v = await this.vault.verify(pass);
-      if (v.ok) { this.uiLocked = false; this.emitState(); }
-      return this._lockResult(v);
-    }
+    // Kilitliyken şifreleme anahtarı bellekten silinir; her kilit açışta parola yeniden türetilir.
     const r = await this.vault.unlock(pass);
     if (r.ok) {
       this.uiLocked = false;
       this.notice = null;
-      this.token = r.secrets.refreshToken || null;
-      if (r.secrets.accountName) this.account = { name: r.secrets.accountName };
-      if (this.token) this._connect(); else this.startLogin();
+      const pending = this._pendingSecrets;
+      this._pendingSecrets = null;
+      if (pending) {
+        try { await this.vault.saveSecrets(pending); } catch { /* yok say */ }
+      }
+      const live = (this._phase === 'ready' || this._phase === 'connecting') && this.token;
+      if (!live) {
+        const secrets = pending || r.secrets;
+        this.token = secrets.refreshToken || null;
+        if (secrets.accountName) this.account = { name: secrets.accountName };
+        if (this.token) this._connect(); else this.startLogin();
+      } else {
+        this.emitState();
+      }
       return { ok: true };
     }
     if (r.code === 'WIPED') {
@@ -220,6 +241,7 @@ class Controller extends EventEmitter {
   lock() {
     if (!this.vault.exists() || this.uiLocked) return;
     this.uiLocked = true;
+    this.vault.forgetKey();
     this.emitState();
   }
 
@@ -235,8 +257,10 @@ class Controller extends EventEmitter {
     clearTimeout(this._retryT);
     this.token = null;
     this.firstLogon = true;
+    this.signedInAt = null;
+    this.connectedAt = null;
     this.account = { name: '' };
-    this.vault.saveSecrets({}).catch(() => {});
+    this._persist({});
     this.notice = 'notice.loggedOut';
     this.engine.reset();
     this.startLogin();
@@ -252,10 +276,83 @@ class Controller extends EventEmitter {
     this.account = { name: '' };
     this.vault.wipe();
     this.store.wipeAll();
+    this.signedInAt = null;
+    this.connectedAt = null;
     this.engine.reset();
     this.uiLocked = false;
     this._phase = 'login';
     this.notice = 'notice.wiped';
+    this.emitState();
+  }
+
+  // ---- veri ve gizlilik ---------------------------------------------------------------
+  clearLog() { this.engine.logs = []; this.emitState(); }
+
+  clearHistory() { this.store.clearHistory(); this.emitState(); }
+
+  clearCache() {
+    this.prices.clear();
+    const bytes = this.store.clearCache();
+    this.emitState();
+    return bytes;
+  }
+
+  dataInfo() { return this.store.dataInfo(); }
+
+  /** Oturumu kapatır ve hesaba bağlı tüm yerel veriyi kalıcı siler (parola ve ayarlar kalır). */
+  logoutFull() {
+    this.logout();
+    this.prices.clear();
+    this.store.accountWipe();
+    this.engine.dropped = 0;
+    this.engine.droppedValue = 0;
+    this.notice = 'notice.loggedOutFull';
+    this.emitState();
+  }
+
+  /** Güncel oturumun gizli olmayan özeti. */
+  sessionInfo() {
+    const e = this.engine;
+    const id = this.backend.steamid ? String(this.backend.steamid) : '';
+    const s = this.store.settings;
+    return {
+      account: this.account.name || '',
+      steamid: id.length > 8 ? id.slice(0, 4) + '…' + id.slice(-4) : id,
+      net: this.net,
+      phase: this._phase,
+      signedInAt: this.signedInAt,
+      connectedAt: this.connectedAt,
+      appStartedAt: this.startedAt,
+      run: e.run,
+      blocked: !!this.backend.blocked,
+      idling: e.idling.length,
+      activeMs: e.activeMs + (e.segStart ? Date.now() - e.segStart : 0),
+      tokenStored: !!this.token && this.vault.exists(),
+      kdf: this.vault.kdfInfo(),
+      failedAttempts: this.vault.lockStatus().fails,
+      lockMinutes: s.lockMinutes,
+      lockOnMinimize: s.lockOnMinimize,
+      hideFromCapture: s.hideFromCapture,
+      launchAtLogin: s.launchAtLogin,
+      dataDir: this.dir,
+      demo: this.demo,
+    };
+  }
+
+  /** Oyun bilgisi (mağaza): ad, açıklama, tür, geliştirici, çıkış tarihi. */
+  async gameInfo(appid) {
+    const info = await this.appinfo.load(appid, this.lang());
+    if (!info || info.missing) return null;
+    return { name: info.name, desc: (info.desc && info.desc[this.lang()]) || '', genres: info.genres || [], devs: info.devs || [], release: info.release || '' };
+  }
+
+  /** Ayrıntılı istatistikler (istatistik penceresi için). */
+  statistics() { return this.engine.summary(); }
+
+  resetStatistics() {
+    this.store.resetStats();
+    this.engine.dropped = 0;
+    this.engine.droppedValue = 0;
     this.emitState();
   }
 

@@ -5,12 +5,12 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.I18N = api;
 })(typeof self !== 'undefined' ? self : this, function () {
-  const LANGS = ['tr', 'en', 'de'];
-  const NAMES = { tr: 'Türkçe', en: 'English', de: 'Deutsch' };
-  const LOCALES = { tr: 'tr-TR', en: 'en-US', de: 'de-DE' };
-  const CONFIRM_WORD = { tr: 'SIL', en: 'DELETE', de: 'LÖSCHEN' };
+  const LANGS = ['tr', 'en', 'de', 'it', 'fr', 'es'];
+  const NAMES = { tr: 'Türkçe', en: 'English', de: 'Deutsch', it: 'Italiano', fr: 'Français', es: 'Español' };
+  const LOCALES = { tr: 'tr-TR', en: 'en-US', de: 'de-DE', it: 'it-IT', fr: 'fr-FR', es: 'es-ES' };
+  const CONFIRM_WORD = { tr: 'SIL', en: 'DELETE', de: 'LÖSCHEN', it: 'ELIMINA', fr: 'SUPPRIMER', es: 'ELIMINAR' };
 
-  const D = { tr: {}, en: {}, de: {} };
+  const D = { tr: {}, en: {}, de: {}, it: {}, fr: {}, es: {} };
   // [anahtar, Türkçe, English, Deutsch]. "a|b" = tekil|çoğul (n === 1 ise ilki).
   const rows = [
     // ---- genel / başlık çubuğu
@@ -19,18 +19,18 @@
     ['tb.lang', 'Dil', 'Language', 'Sprache'],
 
     // ---- parola kuralları
-    ['pw.short', 'Parola en az 8 karakter olmalı.', 'The passphrase must be at least 8 characters.', 'Die Passphrase muss mindestens 8 Zeichen lang sein.'],
+    ['pw.short', 'Parola en az 10 karakter olmalı.', 'The passphrase must be at least 10 characters.', 'Die Passphrase muss mindestens 10 Zeichen lang sein.'],
     ['pw.long', 'Parola en fazla 128 karakter olabilir.', 'The passphrase can be at most 128 characters.', 'Die Passphrase darf höchstens 128 Zeichen lang sein.'],
     ['pw.common', 'Bu parola çok yaygın, başka bir tane seç.', 'This passphrase is too common, pick another one.', 'Diese Passphrase ist zu gebräuchlich, wähle eine andere.'],
     ['pw.same', 'Parola tek karakterden oluşamaz.', 'The passphrase cannot be a single repeated character.', 'Die Passphrase darf nicht nur aus einem Zeichen bestehen.'],
-    ['pw.weak', 'Kısa parolada en az iki tür karakter kullan (harf + rakam gibi) ya da 12+ karakter yaz.', 'For a short passphrase use at least two kinds of characters (letters + digits) or write 12+ characters.', 'Bei kurzen Passphrasen mindestens zwei Zeichenarten (Buchstaben + Ziffern) oder 12+ Zeichen verwenden.'],
+    ['pw.weak', 'Kısa parolada en az iki tür karakter kullan (harf + rakam gibi) ya da 16+ karakter yaz.', 'For a short passphrase use at least two kinds of characters (letters + digits) or write 16+ characters.', 'Bei kurzen Passphrasen mindestens zwei Zeichenarten (Buchstaben + Ziffern) oder 16+ Zeichen verwenden.'],
     ['pw.invalid', 'Geçersiz parola.', 'Invalid passphrase.', 'Ungültige Passphrase.'],
     ['msg.vaultExists', 'Kasa zaten kurulu.', 'The vault is already set up.', 'Der Tresor ist bereits eingerichtet.'],
 
     // ---- kilit / kurulum ekranı
     ['gate.setupSub', 'İlk kurulum — Steam oturum anahtarını koruyacak bir parola belirle.', 'First setup — choose a passphrase that protects your Steam session key.', 'Ersteinrichtung — wähle eine Passphrase, die deinen Steam-Sitzungsschlüssel schützt.'],
     ['gate.lockedSub', 'Kilitli. Devam etmek için parolanı gir.', 'Locked. Enter your passphrase to continue.', 'Gesperrt. Gib deine Passphrase ein, um fortzufahren.'],
-    ['gate.passNew', 'Yeni parola (en az 8 karakter)', 'New passphrase (at least 8 characters)', 'Neue Passphrase (mindestens 8 Zeichen)'],
+    ['gate.passNew', 'Yeni parola (en az 10 karakter)', 'New passphrase (at least 10 characters)', 'Neue Passphrase (mindestens 10 Zeichen)'],
     ['gate.pass', 'Parola', 'Passphrase', 'Passphrase'],
     ['gate.passRepeat', 'Parolayı tekrar yaz', 'Repeat the passphrase', 'Passphrase wiederholen'],
     ['gate.create', 'Parolayı oluştur', 'Create passphrase', 'Passphrase erstellen'],
@@ -226,16 +226,125 @@
     ['set.wipeHint', 'Kasa, ayarlar, istatistik ve önbellek.', 'Vault, settings, statistics and cache.', 'Tresor, Einstellungen, Statistik und Cache.'],
     ['btn.wipeAll', 'Hepsini sil', 'Delete all', 'Alles löschen'],
     ['confirm.wipe.title', 'Tüm yerel veriler silinsin mi?', 'Delete all local data?', 'Alle lokalen Daten löschen?'],
-    ['confirm.wipe.text', 'Parola kasası dahil her şey silinir. Bu işlem geri alınamaz.', 'Everything including the passphrase vault is deleted. This cannot be undone.', 'Alles einschließlich des Passphrase-Tresors wird gelöscht. Das lässt sich nicht rückgängig machen.'],
+    ['confirm.wipe.text', 'Parola kasası dahil her şey üzerine yazılarak kalıcı silinir. Bu işlem geri alınamaz.', 'Everything including the passphrase vault is overwritten and permanently deleted. This cannot be undone.', 'Alles einschließlich des Passphrase-Tresors wird überschrieben und endgültig gelöscht. Das lässt sich nicht rückgängig machen.'],
     ['confirm.wipe.ok', 'Sil', 'Delete', 'Löschen'],
     ['confirm.type', 'Onaylamak için {w} yaz', 'Type {w} to confirm', 'Zum Bestätigen {w} eingeben'],
     ['confirm.cancel', 'Vazgeç', 'Cancel', 'Abbrechen'],
     ['set.how', 'Bu uygulama nasıl korunuyor', 'How this app is protected', 'Wie diese App geschützt ist'],
     ['how.1', 'Steam parolan hiç alınmaz; giriş QR ile yapılır.', 'Your Steam password is never collected; sign-in uses a QR code.', 'Dein Steam-Passwort wird nie erfasst; die Anmeldung erfolgt per QR-Code.'],
     ['how.2', 'Oturum anahtarı parolandan türetilen AES-256 anahtarıyla şifrelenir, üstüne Windows DPAPI uygulanır.', 'The session key is encrypted with an AES-256 key derived from your passphrase, wrapped again with Windows DPAPI.', 'Der Sitzungsschlüssel wird mit einem aus deiner Passphrase abgeleiteten AES-256-Schlüssel verschlüsselt und zusätzlich mit Windows DPAPI geschützt.'],
-    ['how.3', 'Yanlış parola denemeleri yavaşlatılır; 10 hatada kasa silinir.', 'Wrong passphrase attempts are slowed down; the vault is deleted after 10 failures.', 'Falsche Eingaben werden gebremst; nach 10 Fehlversuchen wird der Tresor gelöscht.'],
+    ['how.3', 'Yanlış parola denemeleri 2. hatadan itibaren yavaşlatılır; 10 hatada kasa silinir.', 'Wrong passphrase attempts are slowed down from the 2nd failure; the vault is deleted after 10 failures.', 'Falsche Eingaben werden ab dem 2. Fehlversuch gebremst; nach 10 Fehlversuchen wird der Tresor gelöscht.'],
     ['how.4', 'Arayüz internete çıkamaz; ağ trafiği yalnızca izinli Steam adreslerine gider.', 'The interface cannot reach the internet; network traffic only goes to allow-listed Steam addresses.', 'Die Oberfläche hat keinen Internetzugriff; Netzwerkverkehr geht nur an erlaubte Steam-Adressen.'],
     ['how.5', 'Telemetri, reklam, dış sunucu ya da açık port yok. Hesap bilgin başka yere gönderilmez.', 'No telemetry, ads, external servers or open ports. Your account data is not sent anywhere else.', 'Keine Telemetrie, Werbung, externen Server oder offenen Ports. Deine Kontodaten werden nirgends sonst hingesendet.'],
+
+
+    // ---- v1.2: istatistik, takılan oyun, Windows ile başlat, ek güvenlik
+    ['tb.stats', 'İstatistikler', 'Statistics', 'Statistiken'],
+    ['btn.details', 'Ayrıntılar', 'Details', 'Details'],
+    ['row.stalled', 'Uzun süredir kart vermiyor, sıranın sonuna alındı', 'Has not dropped a card for a long time, moved to the end of the queue', 'Liefert seit langem keine Karte, ans Ende der Warteschlange verschoben'],
+    ['log.stuck', '{name}: {h} saattir kart vermedi, sıranın sonuna alındı', '{name}: no card for {h} h, moved to the end of the queue', '{name}: seit {h} Std. keine Karte, ans Ende der Warteschlange verschoben'],
+    ['log.stuckReset', 'Tüm oyunlar takıldı, sayaçlar sıfırlandı', 'All games stalled, counters reset', 'Alle Spiele hängen, Zähler zurückgesetzt'],
+    ['set.launch', 'Windows ile başlat', 'Start with Windows', 'Mit Windows starten'],
+    ['set.launchHint', 'Pencere gizli açılır ve parolanı bekler.', 'Opens hidden and waits for your passphrase.', 'Startet versteckt und wartet auf deine Passphrase.'],
+    ['set.hideCapture', 'Ekran görüntüsünden gizle', 'Hide from screen capture', 'Vor Bildschirmaufnahmen verbergen'],
+    ['set.hideCaptureHint', 'Pencere ekran yakalama ve paylaşımda siyah görünür.', 'The window shows up black in screenshots and screen sharing.', 'Das Fenster erscheint in Screenshots und Bildschirmfreigaben schwarz.'],
+    ['set.lockMin', 'Küçültünce kilitle', 'Lock when minimized', 'Beim Minimieren sperren'],
+    ['set.stuck', 'Kart vermeyen oyunu geri al', 'Demote games that stop dropping', 'Hängende Spiele zurückstufen'],
+    ['set.stuckHint', '2 saati geçmiş oyun bu süre kart vermezse sıranın sonuna alınır.', 'A game past 2 hours that drops nothing for this long moves to the end of the queue.', 'Ein Spiel über 2 Stunden, das so lange nichts liefert, rutscht ans Ende der Warteschlange.'],
+    ['hour.n', '{n} saat', '{n} hour|{n} hours', '{n} Stunde|{n} Stunden'],
+    ['how.6', 'Kilitliyken şifreleme anahtarı bellekten silinir; kasa her açılışta parolayla yeniden çözülür.', 'While locked, the encryption key is wiped from memory; the vault is decrypted again with your passphrase on every unlock.', 'Im gesperrten Zustand wird der Schlüssel aus dem Speicher gelöscht; der Tresor wird bei jedem Entsperren neu entschlüsselt.'],
+    ['how.7', 'Ayarlar, istatistikler ve geçmiş de Windows DPAPI ile şifrelenir.', 'Settings, statistics and history are also encrypted with Windows DPAPI.', 'Einstellungen, Statistiken und Verlauf werden ebenfalls mit Windows DPAPI verschlüsselt.'],
+    ['stats.title', 'İstatistikler', 'Statistics', 'Statistiken'],
+    ['stats.cards', 'Düşen kart', 'Cards dropped', 'Gefallene Karten'],
+    ['stats.cardsSub', 'bu oturumda {n}', '{n} this session', '{n} in dieser Sitzung'],
+    ['stats.value', 'Tahmini kazanç', 'Estimated earnings', 'Geschätzter Ertrag'],
+    ['stats.valueSub', 'bu oturumda {v}', '{v} this session', '{v} in dieser Sitzung'],
+    ['stats.time', 'Toplam çalışma süresi', 'Total running time', 'Gesamtlaufzeit'],
+    ['stats.timeSub', 'bu oturumda {t}', '{t} this session', '{t} in dieser Sitzung'],
+    ['stats.open', 'Uygulama açık', 'App open for', 'App geöffnet seit'],
+    ['stats.openSub', 'kapatınca sıfırlanır', 'resets when you quit', 'wird beim Beenden zurückgesetzt'],
+    ['stats.gamesRun', 'Çalıştırılan oyun', 'Games run', 'Gestartete Spiele'],
+    ['stats.gamesDropped', 'Kart düşen oyun', 'Games with drops', 'Spiele mit Drops'],
+    ['stats.gamesNoDrop', 'Kart düşmeyen oyun', 'Games without drops', 'Spiele ohne Drops'],
+    ['stats.gamesNoDropSub', '{w} bekliyor · {s} takıldı', '{w} waiting · {s} stalled', '{w} warten · {s} hängen'],
+    ['stats.today', 'Bugün', 'Today', 'Heute'],
+    ['stats.week', 'Son 7 gün', 'Last 7 days', 'Letzte 7 Tage'],
+    ['stats.avg', 'Kart başına süre', 'Time per card', 'Zeit pro Karte'],
+    ['stats.avgVal', '{m} dk', '{m} min', '{m} Min.'],
+    ['stats.since', 'İlk kullanım: {d}', 'First used: {d}', 'Erstmals genutzt: {d}'],
+    ['stats.chart', 'Son 14 gün', 'Last 14 days', 'Letzte 14 Tage'],
+    ['stats.top', 'En çok kart veren oyunlar', 'Games with the most cards', 'Spiele mit den meisten Karten'],
+    ['stats.stalled', 'Uzun süredir kart vermeyenler', 'Not dropping for a long time', 'Seit langem ohne Drop'],
+    ['stats.recent', 'Son düşenler', 'Recent drops', 'Letzte Drops'],
+    ['stats.none', 'Henüz veri yok', 'No data yet', 'Noch keine Daten'],
+    ['stats.cardsCount', '{n} kart', '{n} card|{n} cards', '{n} Karte|{n} Karten'],
+    ['stats.idle', '{t} çalıştı', 'ran {t}', 'lief {t}'],
+    ['stats.stalledFor', '{t} kart yok', 'no card for {t}', '{t} keine Karte'],
+    ['stats.reset', 'İstatistikleri sıfırla', 'Reset statistics', 'Statistiken zurücksetzen'],
+    ['stats.resetTitle', 'İstatistikler sıfırlansın mı?', 'Reset statistics?', 'Statistiken zurücksetzen?'],
+    ['stats.resetText', 'Toplam sayaçlar ve düşen kart geçmişi silinir. Ayarların ve oturumun korunur.', 'Totals and the drop history are deleted. Your settings and session are kept.', 'Gesamtwerte und Drop-Verlauf werden gelöscht. Einstellungen und Sitzung bleiben erhalten.'],
+    ['stats.resetOk', 'Sıfırla', 'Reset', 'Zurücksetzen'],
+    ['notif.waitTitle', 'Cardfall parolanı bekliyor', 'Cardfall is waiting for you', 'Cardfall wartet auf dich'],
+    ['notif.waitBody', 'Kart düşürmeye başlamak için aç ve parolanı gir.', 'Open it and enter your passphrase to start idling.', 'Öffne es und gib deine Passphrase ein, um zu starten.'],
+    ['tray.locked', 'Cardfall — parola bekliyor', 'Cardfall — waiting for passphrase', 'Cardfall — wartet auf Passphrase'],
+
+
+    // ---- v1.2: oturum, veri ve gizlilik, oyun bilgisi
+    ['sess.title', 'Güncel oturum', 'Current session', 'Aktuelle Sitzung'],
+    ['sess.open', 'Oturum bilgilerini göster', 'Show session details', 'Sitzungsdetails anzeigen'],
+    ['btn.view', 'Göster', 'Show', 'Anzeigen'],
+    ['sess.account', 'Hesap', 'Account', 'Konto'],
+    ['sess.steamid', 'Steam ID', 'Steam ID', 'Steam-ID'],
+    ['sess.status', 'Bağlantı', 'Connection', 'Verbindung'],
+    ['sess.online', 'Çevrimiçi', 'Online', 'Online'],
+    ['sess.offline', 'Çevrimdışı', 'Offline', 'Offline'],
+    ['sess.signedIn', 'Oturum açıldı', 'Signed in', 'Angemeldet'],
+    ['sess.connectedAt', 'Son bağlanma', 'Last connected', 'Zuletzt verbunden'],
+    ['sess.appOpen', 'Uygulama açık', 'App open for', 'App geöffnet seit'],
+    ['sess.state', 'Durum', 'State', 'Status'],
+    ['sess.idling', 'Çalışan oyun', 'Games running', 'Laufende Spiele'],
+    ['sess.running', 'Çalışma süresi (bu oturum)', 'Running time (this session)', 'Laufzeit (diese Sitzung)'],
+    ['sess.token', 'Kayıtlı Steam anahtarı', 'Saved Steam key', 'Gespeicherter Steam-Schlüssel'],
+    ['sess.tokenYes', 'Kasada şifreli', 'Encrypted in the vault', 'Verschlüsselt im Tresor'],
+    ['sess.tokenNo', 'Yok', 'None', 'Keiner'],
+    ['sess.vault', 'Kasa şifrelemesi', 'Vault encryption', 'Tresor-Verschlüsselung'],
+    ['sess.vaultVal', 'scrypt N={n} · AES-256-GCM · DPAPI', 'scrypt N={n} · AES-256-GCM · DPAPI', 'scrypt N={n} · AES-256-GCM · DPAPI'],
+    ['sess.failed', 'Yanlış parola denemesi', 'Wrong passphrase attempts', 'Falsche Passphrase-Versuche'],
+    ['sess.autolock', 'Otomatik kilit', 'Auto-lock', 'Automatische Sperre'],
+    ['sess.autolockVal', '{n} dk hareketsizlikten sonra', 'after {n} min idle', 'nach {n} Min. Inaktivität'],
+    ['sess.capture', 'Ekran yakalama koruması', 'Screen capture protection', 'Schutz vor Bildschirmaufnahme'],
+    ['sess.dir', 'Veri klasörü', 'Data folder', 'Datenordner'],
+    ['sess.on', 'Açık', 'On', 'An'],
+    ['sess.hint', 'Bu bilgiler yalnızca bu bilgisayarda gösterilir, hiçbir yere gönderilmez.', 'This information is only shown on this computer and is never sent anywhere.', 'Diese Angaben werden nur auf diesem Computer angezeigt und nirgends hingesendet.'],
+    ['data.title', 'Veri ve gizlilik', 'Data & privacy', 'Daten & Datenschutz'],
+    ['data.size', 'Yerel veri: {size}', 'Local data: {size}', 'Lokale Daten: {size}'],
+    ['data.log', 'Etkinlik günlüğünü temizle', 'Clear the activity log', 'Aktivitätsprotokoll leeren'],
+    ['data.logHint', 'Yalnızca ekrandaki günlük.', 'Only the log shown on screen.', 'Nur das angezeigte Protokoll.'],
+    ['data.history', 'Düşen kart geçmişini sil', 'Delete the drop history', 'Drop-Verlauf löschen'],
+    ['data.historyHint', 'Grafik ve son düşenler listesi. Toplam sayaçlar kalır.', 'The chart and recent drops. Totals are kept.', 'Diagramm und letzte Drops. Gesamtwerte bleiben erhalten.'],
+    ['data.cache', 'Önbelleği temizle', 'Clear the cache', 'Cache leeren'],
+    ['data.cacheHint', 'Oyun görselleri, mağaza bilgileri ve fiyatlar ({size}). Gerektiğinde yeniden indirilir.', 'Game images, store info and prices ({size}). Downloaded again when needed.', 'Spielbilder, Store-Infos und Preise ({size}). Werden bei Bedarf neu geladen.'],
+    ['data.stats', 'İstatistikleri sıfırla', 'Reset statistics', 'Statistiken zurücksetzen'],
+    ['data.statsHint', 'Toplam sayaçlar, oyun sayıları ve geçmiş.', 'Totals, game counts and history.', 'Gesamtwerte, Spielanzahlen und Verlauf.'],
+    ['btn.clear', 'Temizle', 'Clear', 'Leeren'],
+    ['btn.delete', 'Sil', 'Delete', 'Löschen'],
+    ['data.logoutFull', 'Hesaptan tamamen çık', 'Sign out completely', 'Vollständig abmelden'],
+    ['data.logoutFullHint', 'Oturumu kapatır ve hesaba bağlı tüm verileri (istatistik, geçmiş, önbellek, gizlenen oyunlar) kalıcı siler. Parolan ve ayarların kalır.', 'Signs out and permanently deletes all account data (statistics, history, cache, hidden games). Your passphrase and settings stay.', 'Meldet ab und löscht alle Kontodaten (Statistik, Verlauf, Cache, ausgeblendete Spiele) endgültig. Passphrase und Einstellungen bleiben erhalten.'],
+    ['btn.logoutFull', 'Tamamen çık', 'Sign out fully', 'Vollständig abmelden'],
+    ['confirm.logoutFull.title', 'Hesaptan tamamen çıkılsın mı?', 'Sign out completely?', 'Vollständig abmelden?'],
+    ['confirm.logoutFull.text', 'Steam anahtarı ve hesaba bağlı tüm yerel veri üzerine yazılarak silinir. Tekrar QR ile giriş yapman gerekir.', 'The Steam key and all account-linked local data are overwritten and deleted. You will need to sign in with a QR code again.', 'Der Steam-Schlüssel und alle kontobezogenen lokalen Daten werden überschrieben und gelöscht. Du musst dich erneut per QR-Code anmelden.'],
+    ['data.shred', 'Silinen dosyaların üzerine önce rastgele veri yazılır, sonra dosya kaldırılır.', 'Deleted files are first overwritten with random data, then removed.', 'Gelöschte Dateien werden zuerst mit Zufallsdaten überschrieben und dann entfernt.'],
+    ['data.cleared', 'Temizlendi', 'Cleared', 'Geleert'],
+    ['notice.loggedOutFull', 'Hesaptan tamamen çıkıldı, hesaba bağlı veriler silindi.', 'Signed out completely, the account data was deleted.', 'Vollständig abgemeldet, die Kontodaten wurden gelöscht.'],
+    ['row.info', 'Oyun bilgisi', 'Game info', 'Spielinfo'],
+    ['info.loading', 'Bilgi alınıyor…', 'Loading info…', 'Infos werden geladen…'],
+    ['info.none', 'Mağaza bilgisi bulunamadı.', 'No store info found.', 'Keine Store-Infos gefunden.'],
+    ['info.developer', 'Geliştirici', 'Developer', 'Entwickler'],
+    ['info.release', 'Çıkış', 'Release', 'Erscheinung'],
+    ['info.genres', 'Tür', 'Genre', 'Genre'],
+    ['info.hours', 'Oynama', 'Played', 'Gespielt'],
+    ['info.drops', 'Kalan kart hakkı', 'Card drops left', 'Verbleibende Kartendrops'],
+    ['info.store', "Steam'de aç", 'Open on Steam', 'Auf Steam öffnen'],
 
     // ---- tepsi / sistem bildirimi (ana süreç)
     ['tray.open', "Cardfall'ı aç", 'Open Cardfall', 'Cardfall öffnen'],
@@ -249,6 +358,11 @@
     ['notif.title', 'Kart düştü', 'Card dropped', 'Karte gefallen'],
   ];
   for (const [key, tr, en, de] of rows) { D.tr[key] = tr; D.en[key] = en; D.de[key] = de; }
+
+  /** Başka dosyadan gelen çevirileri ekler: { it: {anahtar: metin}, fr: {...}, es: {...} } */
+  function extend(data) {
+    for (const l of Object.keys(data)) Object.assign(D[l] || (D[l] = {}), data[l]);
+  }
 
   function t(lang, key, p) {
     let s = (D[lang] && D[lang][key]);
@@ -269,5 +383,8 @@
     return LANGS.includes(l) ? l : 'en';
   }
 
-  return { LANGS, NAMES, LOCALES, CONFIRM_WORD, D, t, resolve };
+  const api = { LANGS, NAMES, LOCALES, CONFIRM_WORD, D, t, resolve, extend };
+  // Node tarafında (ana süreç, testler) ek diller doğrudan yüklenir; tarayıcıda i18n-more.js ayrıca yüklenir.
+  if (typeof module === 'object' && module.exports) extend(require('./i18n-more'));
+  return api;
 });

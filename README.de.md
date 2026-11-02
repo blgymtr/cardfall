@@ -11,7 +11,7 @@ Mit QR-Code anmelden, Spiele „laufen“ lassen, Karten fallen sehen.
 [![Release](https://img.shields.io/github/v/release/blgymtr/cardfall)](https://github.com/blgymtr/cardfall/releases/latest)
 [![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-green.svg)](LICENSE)
 
-[English](README.md) · **Deutsch** · [Türkçe](README.tr.md)
+[English](README.md) · **Deutsch** · [Türkçe](README.tr.md) · [Italiano](README.it.md) · [Français](README.fr.md) · [Español](README.es.md)
 
 <img src="docs/screenshots/app-dark.png" alt="Cardfall-Hauptfenster (Demodaten)" width="860">
 
@@ -29,27 +29,35 @@ Windows SmartScreen beim ersten Start warnen („Weitere Informationen“ → �
 
 - **Anmeldung per QR-Code.** Dein Steam-Passwort wird in Cardfall nie eingegeben oder gespeichert.
 - **Smarter Betrieb.** Spiele unter 2 Stunden laufen gemeinsam (bis zu 32), danach nacheinander. Alternativ feste 1 bis 32 Spiele.
-- **Volle Kontrolle.** Pausieren, nächstes Spiel wählen, ein bestimmtes Spiel sofort starten, Spiele aus der Warteschlange ausblenden.
-- **Live-Zahlen.** Laufzeit (Sitzung und gesamt), verbleibende Kartendrops, Spiele in der Warteschlange, in dieser Sitzung gefallene
-  Karten und ein geschätzter Wert vom Steam-Marktplatz (abzüglich Steam-Gebühr).
+- **Hängende Spiele werden zurückgestuft.** Ein Spiel über 2 Stunden, das keine Karten mehr liefert, rutscht nach einer wählbaren Zeit ans Ende der Warteschlange.
+- **Volle Kontrolle.** Pausieren, nächstes Spiel wählen, ein bestimmtes Spiel sofort starten, Spiele ausblenden.
+- **Spielinfos, die aktuell bleiben.** Jedes Spiel zeigt sein Bild, mit Ersatz über das aktuelle Store-Bild, wenn die klassische Adresse fehlt. Ein Klick zeigt Beschreibung, Genres, Entwickler und Erscheinungsdatum. Bilder und Infos werden zwischengespeichert und alle 7 Tage im Hintergrund aktualisiert.
+- **Live-Zahlen und Statistiken.** Laufzeit (Sitzung und gesamt), verbleibende Karten, Warteschlange, gefallene Karten, gestartete Spiele, Spiele mit und ohne Drops, 14-Tage-Diagramm, Top-Spiele, letzte Drops und ein geschätzter Wert vom Steam-Marktplatz (netto nach Steam-Gebühr).
 - **Aktualisieren-Knopf** und automatische Aktualisierung, die Abzeichen neu liest und neue Drops zählt.
 - **Verträgt sich mit Steam.** Startest du anderswo ein Spiel auf deinem Konto, wartet Cardfall und macht danach weiter.
-- **Helles und dunkles Design**, Oberfläche auf **Deutsch, Englisch und Türkisch** (folgt der Systemsprache, jederzeit umschaltbar).
-- **Infobereich-Modus.** Schließt du das Fenster im Betrieb, läuft Cardfall im Hintergrund weiter und sperrt die Oberfläche.
+- **Mit Windows starten** (versteckt, wartet auf deine Passphrase) und **Infobereich-Modus**: Schließt du das Fenster im Betrieb, läuft Cardfall weiter und sperrt die Oberfläche.
+- **Sechs Sprachen**: English, Deutsch, Türkçe, Italiano, Français, Español. Helles und dunkles Design.
+- **Daten- & Datenschutz-Werkzeuge.** Aktuelle Sitzung ansehen, Aktivitätsprotokoll leeren, Drop-Verlauf löschen, Cache leeren, Statistiken zurücksetzen, abmelden, vollständig abmelden (löscht alle Kontodaten) oder alles löschen. Beim Löschen werden die Dateien zuerst mit Zufallsdaten überschrieben.
 
 ## Sicherheit
 
 | Maßnahme | Details |
 |---|---|
 | Kein Passwort, QR statt Eingabe | Dein Steam-Passwort gelangt nie in die App |
-| Verschlüsselter Tresor | Der Steam-Erneuerungsschlüssel wird mit AES-256-GCM verschlüsselt (Schlüssel aus deiner Passphrase per scrypt, N=2^16) und zusätzlich mit Windows DPAPI geschützt |
-| Versuchslimit | Wachsende Wartezeit nach 3 Fehlversuchen, nach 10 wird der Tresor gelöscht |
-| Automatische Sperre | Bei Inaktivität, Windows-Sperre, Ruhezustand und beim Ausblenden in den Infobereich. Der Betrieb läuft gesperrt weiter |
+| Verschlüsselter Tresor | Der Steam-Erneuerungsschlüssel wird mit AES-256-GCM verschlüsselt (Schlüssel aus deiner Passphrase per scrypt, N=2^17) und zusätzlich mit Windows DPAPI geschützt. Ältere Tresore werden automatisch aufgewertet |
+| Passphrase-Regeln | Mindestens 10 Zeichen, gebräuchliche und triviale Passphrasen werden abgelehnt |
+| Versuchslimit | Wartezeit ab dem 2. Fehlversuch, nach 10 wird der Tresor gelöscht. Der Zähler liegt in der Tresordatei |
+| Automatische Sperre | Bei Inaktivität, Windows-Sperre, Ruhezustand, optional beim Minimieren und beim Ausblenden in den Infobereich. Der Betrieb läuft gesperrt weiter |
+| Schlüssel verlassen den Speicher | Beim Sperren wird der Schlüssel gelöscht und beim Entsperren neu abgeleitet |
 | Nichts sichtbar im gesperrten Zustand | Die gesperrte Oberfläche bekommt weder Spielliste noch Kontodaten |
-| Isolierte Oberfläche | `contextIsolation`, Sandbox, kein Node, strenge CSP mit `connect-src 'none'`, die Oberfläche hat keinen Internetzugriff |
-| Schmale IPC-Schnittstelle | Nur validierte Aufrufe von der eigenen Seite der App werden akzeptiert |
-| Netzwerk-Allowlist | Nur `steamcommunity.com`, `api.steampowered.com` und das Steam-CDN über HTTPS |
-| Gehärtetes Electron | `RunAsNode` und `--inspect` aus, nur Laden aus asar, asar-Integritätsprüfung |
+| Versiegelte lokale Daten | Einstellungen, Statistiken und Verlauf sind mit Windows DPAPI verschlüsselt |
+| Isolierte Oberfläche | `contextIsolation`, Sandbox, kein Node, strenge CSP mit `connect-src 'none'` und Trusted Types, die Oberfläche hat keinen Internetzugriff |
+| Schmale, begrenzte IPC | Nur validierte Aufrufe von der eigenen Seite der App, höchstens 50 pro Sekunde |
+| Netzwerk-Allowlist | Nur `steamcommunity.com`, `store.steampowered.com`, `api.steampowered.com` und das Steam-Bild-CDN über HTTPS, TLS-Prüfung erzwungen |
+| Gehärtetes Electron | `RunAsNode` und `--inspect` aus, nur Laden aus asar, asar-Integritätsprüfung, keine Berechtigungen, keine Webviews |
+| Optionale Aufnahmesperre | Das Fenster kann vor Screenshots und Bildschirmfreigabe verborgen werden |
+| Endgültiges Löschen | Dateien werden vor dem Entfernen mit Zufallsdaten überschrieben |
+| Lieferkette | Abhängigkeiten geprüft (0 bekannte Schwachstellen in Produktion), Dependabot, Release-Builds mit Herkunftsnachweis |
 | Privat | Keine Telemetrie, keine Werbung, keine Update-Pings, keine offenen Ports |
 
 Bedrohungsmodell und Meldeweg stehen in der [Sicherheitsrichtlinie](SECURITY.md) (englisch).
@@ -65,6 +73,8 @@ Bedrohungsmodell und Meldeweg stehen in der [Sicherheitsrichtlinie](SECURITY.md)
 <summary>Weitere Screenshots</summary>
 
 <img src="docs/screenshots/app-light.png" alt="Helles Design" width="720">
+<img src="docs/screenshots/stats.png" alt="Statistiken" width="720">
+<img src="docs/screenshots/gameinfo.png" alt="Spielinfo" width="720">
 <img src="docs/screenshots/login.png" alt="QR-Anmeldung" width="720">
 <img src="docs/screenshots/settings.png" alt="Einstellungen" width="720">
 
@@ -76,7 +86,8 @@ Bedrohungsmodell und Meldeweg stehen in der [Sicherheitsrichtlinie](SECURITY.md)
 - Drops sind zufällig und werden von Steam bestimmt. Cardfall hält deine Spiele „im Spiel“, es steuert nicht, wann eine Karte erscheint.
 - Startest du ein Spiel am selben PC, fragt Steam, ob die andere Sitzung beendet werden soll. Cardfall erkennt das und wartet.
 - Geschätzte Werte stammen aus aktuellen Angeboten des Steam-Marktplatzes und sind nur ein grober Anhalt. Preise werden langsam geladen, weil der Marktplatz Anfragen begrenzt.
-- Deine Daten liegen in `%APPDATA%\Cardfall`. **Einstellungen → Alle lokalen Daten löschen** entfernt alles.
+- Deine Daten liegen in `%APPDATA%\Cardfall`. **Einstellungen → Daten & Datenschutz** verwaltet und löscht sie.
+- Das Überschreiben vor dem Löschen ist ein Best-Effort: Auf SSDs kann der Verschleißausgleich alte Blöcke behalten. Der Steam-Schlüssel liegt ohnehin immer verschlüsselt vor.
 
 ## Haftungsausschluss
 
@@ -94,7 +105,8 @@ npm run dist       # release/Cardfall-Setup-<Version>.exe bauen
 ```
 
 Aufbau: `src/main` (Tresor, Steam-Sitzung, Engine, Sicherheit), `src/preload` (IPC-Brücke),
-`src/renderer` (Oberfläche und Übersetzungen in `i18n.js`). Eine neue Sprache entsteht durch eine weitere Spalte in `src/renderer/i18n.js`.
+`src/renderer` (Oberfläche; Übersetzungen in `i18n.js` und `i18n-more.js`). Eine neue Sprache entsteht durch eine weitere Spalte dort;
+ein Test prüft, dass jeder Schlüssel in jeder Sprache mit denselben Platzhaltern existiert.
 Issues und Pull Requests sind willkommen.
 
 ## Lizenz

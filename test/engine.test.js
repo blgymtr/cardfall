@@ -1,8 +1,12 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { EventEmitter } = require('events');
 const { Engine } = require('../src/main/engine');
+const { Store } = require('../src/main/store');
 
 function setup(games, settings = {}) {
   const calls = [];
@@ -21,12 +25,8 @@ function setup(games, settings = {}) {
     progress: () => ({ done: 0, total: 0 }),
     stop() {},
   });
-  const store = {
-    settings: { order: 'drops-desc', concurrency: 'smart', refreshMinutes: 5, blacklist: [], ...settings },
-    stats: { activeMs: 0, dropped: 0, value: 0 },
-    statsFile: { save() {} },
-    setSettings(p) { Object.assign(this.settings, p); return this.settings; },
-  };
+  const store = new Store(fs.mkdtempSync(path.join(os.tmpdir(), 'cf-eng-')));
+  store.setSettings({ concurrency: 'smart', ...settings });
   const e = new Engine({ backend, prices, store });
   return { e, backend, calls, store };
 }
@@ -103,5 +103,85 @@ test('başka yerde oyun açıkken çalışma süresi işlemez', async () => {
   t += 120_000;
   e._accrue();
   assert.strictEqual(e.activeMs, before);
+  e.pause();
+});
+
+test('takılan oyun sıranın sonuna alınır, kart düşünce sayaç sıfırlanır', async () => {
+  let t = 10_000;
+  const { e, backend } = setup([G(1, 5, 10), G(2, 3, 10)], { stuckMinutes: 60 });
+  e.now = () => t;
+  await e.start();
+  assert.deepStrictEqual(e.idling, [1]);            // en çok kart
+  t += 61 * 60_000;
+  e.tick();
+  assert.strictEqual(e.isStuck(1), true);
+  assert.deepStrictEqual(e.idling, [2]);            // takılan geri alındı
+  assert.ok(e.logs.some((l) => l.key === 'log.stuck'));
+  assert.strictEqual(e.snapshot().games.find((g) => g.appid === 1).stuck, true);
+  // takılan oyun kart verirse sayaç sıfırlanır
+  backend.games = backend.games.map((g) => (g.appid === 1 ? { ...g, drops: 4 } : g));
+  await e.refresh();
+  assert.strictEqual(e.isStuck(1), false);
+  e.pause();
+});
+
+test('hepsi takılırsa sayaçlar sıfırlanıp yeni tur başlar', async () => {
+  let t = 5_000;
+  const { e } = setup([G(1, 5, 10)], { stuckMinutes: 30 });
+  e.now = () => t;
+  await e.start();
+  t += 31 * 60_000;
+  e.tick();
+  assert.deepStrictEqual(e.idling, [1]);
+  assert.ok(e.logs.some((l) => l.key === 'log.stuckReset'));
+  assert.strictEqual(e.isStuck(1), false);
+  e.pause();
+});
+
+test('takılan oyun tespiti kapatılabilir', async () => {
+  let t = 1_000;
+  const { e } = setup([G(1, 5, 10), G(2, 3, 10)], { stuckMinutes: 0 });
+  e.now = () => t;
+  await e.start();
+  t += 10 * 3600_000;
+  e.tick();
+  assert.strictEqual(e.isStuck(1), false);
+  assert.deepStrictEqual(e.idling, [1]);
+  e.pause();
+});
+
+test('istatistik: oyun sayıları, geçmiş ve günlük özet', async () => {
+  let t = Date.now();
+  const { e, backend, store } = setup([G(1, 2, 5), G(2, 2, 5), G(3, 2, 5)], { concurrency: '2' });
+  e.now = () => t;
+  await e.start();
+  t += 10 * 60_000;
+  e._accrue();
+  backend.games = backend.games.map((g) => (g.appid === 1 ? { ...g, drops: 0 } : g));
+  await e.refresh();
+  const s = e.summary();
+  assert.strictEqual(s.cardsTotal, 2);
+  assert.strictEqual(s.gamesRun, 2);            // 1 ve 2 çalıştı
+  assert.strictEqual(s.gamesDropped, 1);        // yalnızca 1 kart verdi
+  assert.strictEqual(s.gamesNoDrop, 1);         // 2 çalıştı ama kart yok
+  assert.strictEqual(s.today, 2);
+  assert.strictEqual(s.daily.length, 14);
+  assert.strictEqual(s.recent.length, 1);
+  assert.strictEqual(s.recent[0].n, 2);
+  assert.ok(s.activeMs >= 10 * 60_000);
+  assert.strictEqual(store.history.length, 1);
+  e.pause();
+});
+
+test('istatistik sıfırlanır', async () => {
+  const { e, backend, store } = setup([G(1, 2, 5)]);
+  await e.start();
+  backend.games = [G(1, 1, 5)];
+  await e.refresh();
+  assert.strictEqual(store.stats.dropped, 1);
+  store.resetStats();
+  assert.strictEqual(store.stats.dropped, 0);
+  assert.strictEqual(store.history.length, 0);
+  assert.deepStrictEqual(store.stats.games, {});
   e.pause();
 });

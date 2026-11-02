@@ -48,6 +48,7 @@
     coin: [['circle', { cx: 12, cy: 12, r: 10 }], ['path', { d: 'M15 9c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2-1.3 0-2.4-.6-3-1.5M12 6v1.5m0 9V18' }]],
     shield: [['path', { d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' }], ['polyline', { points: '9 12 11 14 15 10' }]],
     check: [['polyline', { points: '20 6 9 17 4 12' }]],
+    chart: [['line', { x1: 18, y1: 20, x2: 18, y2: 10 }], ['line', { x1: 12, y1: 20, x2: 12, y2: 4 }], ['line', { x1: 6, y1: 20, x2: 6, y2: 14 }]],
     cards: [['rect', { x: 3, y: 5, width: 13, height: 17, rx: 2, transform: 'rotate(-8 9 13)' }], ['rect', { x: 8, y: 2, width: 13, height: 17, rx: 2 }]],
   };
   function icon(name, size = 18) {
@@ -133,6 +134,7 @@
       I18N.LANGS.map((l) => h('option', { value: l, text: I18N.NAMES[l] })));
     langSel.value = lang;
     tbActions.append(langSel);
+    if (ready) tbActions.append(h('button', { class: 'icon-btn', title: T('tb.stats'), onclick: () => openStats() }, icon('chart', 17)));
     if (ready) tbActions.append(h('button', { class: 'icon-btn', title: T('tb.settings'), onclick: () => openSettings() }, icon('sliders', 17)));
     if (canLock) tbActions.append(h('button', { class: 'icon-btn', title: T('tb.lock'), onclick: () => api.lock() }, icon('lock', 17)));
   }
@@ -451,9 +453,9 @@
   function gameRow(r) {
     const meta = T('row.hours', { h: nf.format(r.hours) }) + (r.unitText ? T('row.card', { p: r.unitText }) : '');
     return h('div', { class: 'row' + (r.idle ? ' idle' : '') + (r.black ? ' black' : '') },
-      h('div', { class: 'thumb' }, gameImg(r.appid, 'capsule')),
-      h('div', {},
-        h('div', { class: 'r-name' }, r.idle ? h('span', { class: 'live', title: T('row.live') }) : null, h('span', { text: r.name })),
+      h('div', { class: 'thumb clickable', title: T('row.info'), onclick: () => openGameInfo(r) }, gameImg(r.appid, 'capsule')),
+      h('div', { class: 'clickable', title: T('row.info'), onclick: () => openGameInfo(r) },
+        h('div', { class: 'r-name' }, r.idle ? h('span', { class: 'live', title: T('row.live') }) : null, h('span', { text: r.name }), r.stuck ? h('span', { class: 'flag', title: T('row.stalled') }, icon('clock', 13)) : null),
         h('div', { class: 'r-meta', text: meta })),
       h('div', { class: 'r-nums' }, h('span', { class: 'r-val num', text: r.valueText || '' }), h('span', { class: 'badge num', title: T('row.drops'), text: r.drops })),
       h('div', { class: 'r-act' },
@@ -465,11 +467,16 @@
     ui.logEl.replaceChildren(...e.logs.map((l) => h('li', { class: l.kind }, h('i'), h('span', { text: T(l.key, l.params) }), h('time', { text: hhmm(l.t) }))));
     if (!e.logs.length) ui.logEl.replaceChildren(h('li', {}, h('i'), h('span', { class: 'muted', text: T('side.none') }), h('time')));
     const kv = (a, b) => h('div', {}, h('span', { text: a }), h('span', { class: 'num', text: b }));
+    const L = e.lifetime;
     ui.kv.replaceChildren(
-      kv(T('tot.time'), longDur(e.lifetime.activeMs)),
-      kv(T('tot.cards'), nf.format(e.lifetime.dropped)),
-      kv(T('tot.value'), e.lifetime.valueText && e.lifetime.dropped ? e.lifetime.valueText : '—'),
-      kv(T('tot.account'), S.account && S.account.name ? S.account.name : '—'));
+      kv(T('tot.time'), longDur(L.activeMs)),
+      kv(T('tot.cards'), nf.format(L.dropped)),
+      kv(T('stats.gamesRun'), nf.format(L.gamesRun)),
+      kv(T('stats.gamesDropped'), nf.format(L.gamesDropped)),
+      kv(T('stats.gamesNoDrop'), nf.format(L.gamesNoDrop)),
+      kv(T('tot.value'), L.valueText && L.dropped ? L.valueText : '—'),
+      kv(T('tot.account'), S.account && S.account.name ? S.account.name : '—'),
+      h('button', { class: 'btn sm', text: T('btn.details'), onclick: () => openStats() }));
   }
 
   // ---- ayarlar ------------------------------------------------------------------------------------------
@@ -536,6 +543,10 @@
     } });
     pwForm.append(o, n1, n2, pwErr, pwSave);
 
+    const sizeLine = h('p', { class: 'muted small', text: '' });
+    const cacheRow = setRow(T('data.cache'), T('data.cacheHint', { size: '…' }), h('button', { class: 'btn sm', text: T('btn.clear'), onclick: async () => {
+      await api.clearData('cache'); toast(T('data.cleared')); fillDataInfo(sizeLine, cacheRow);
+    } }));
     const mins = (arr) => arr.map((n) => [n, T('min.n', { n })]);
     const body = h('div', { class: 'modal-body scroll' },
       h('h4', { text: T('set.appearance') }), setRow(T('set.theme'), null, themeSeg), setRow(T('set.language'), null, langSel),
@@ -546,10 +557,30 @@
       setRow(T('set.autostart'), null, sw('autoStart', st.autoStart)),
       setRow(T('set.keepawake'), null, sw('keepAwake', st.keepAwake)),
       setRow(T('set.tray'), T('set.trayHint'), sw('closeToTray', st.closeToTray)),
+      setRow(T('set.launch'), T('set.launchHint'), sw('launchAtLogin', st.launchAtLogin)),
+      setRow(T('set.stuck'), T('set.stuckHint'), sel('stuckMinutes', st.stuckMinutes, [[0, T('lock.off')], ...[1, 2, 3, 6].map((n) => [n * 60, T('hour.n', { n })])])),
       h('h4', { text: T('set.security') }),
       setRow(T('set.autolock'), T('set.autolockHint'), sel('lockMinutes', st.lockMinutes, [[0, T('lock.off')], ...mins([2, 5, 10, 30]), [60, T('lock.hour')]])),
+      setRow(T('set.lockMin'), null, sw('lockOnMinimize', st.lockOnMinimize)),
+      setRow(T('set.hideCapture'), T('set.hideCaptureHint'), sw('hideFromCapture', st.hideFromCapture)),
       setRow(T('set.passphrase'), null, h('button', { class: 'btn sm', text: T('btn.change'), onclick: () => { pwForm.hidden = !pwForm.hidden; } })),
       pwForm,
+      h('h4', { text: T('data.title') }),
+      setRow(T('sess.title'), T('sess.hint'), h('button', { class: 'btn sm', text: T('btn.view'), onclick: () => openSession() })),
+      setRow(T('data.log'), T('data.logHint'), h('button', { class: 'btn sm', text: T('btn.clear'), onclick: async () => { await api.clearData('log'); toast(T('data.cleared')); } })),
+      setRow(T('data.history'), T('data.historyHint'), h('button', { class: 'btn sm', text: T('btn.delete'), onclick: async () => {
+        if (await confirmDialog({ title: T('data.history'), text: T('data.historyHint'), ok: T('btn.delete'), danger: true })) { await api.clearData('history'); toast(T('data.cleared')); fillDataInfo(sizeLine, cacheRow); }
+      } })),
+      cacheRow,
+      setRow(T('data.stats'), T('data.statsHint'), h('button', { class: 'btn sm danger', text: T('stats.resetOk'), onclick: async () => {
+        if (await confirmDialog({ title: T('stats.resetTitle'), text: T('stats.resetText'), ok: T('stats.resetOk'), danger: true })) { await api.resetStats(); toast(T('data.cleared')); }
+      } })),
+      sizeLine,
+      h('p', { class: 'muted small', text: T('data.shred') }),
+      h('h4', { text: T('set.logout') }),
+      setRow(T('data.logoutFull'), T('data.logoutFullHint'), h('button', { class: 'btn sm danger', text: T('btn.logoutFull'), onclick: async () => {
+        if (await confirmDialog({ title: T('confirm.logoutFull.title'), text: T('confirm.logoutFull.text'), ok: T('btn.logoutFull'), danger: true, typed: I18N.CONFIRM_WORD[lang] })) { closeModal(); api.logoutFull(); }
+      } })),
       setRow(T('set.logout'), T('set.logoutHint'), h('button', { class: 'btn sm danger', text: T('btn.logout'), onclick: async () => {
         if (await confirmDialog({ title: T('confirm.logout.title'), text: T('confirm.logout.text'), ok: T('btn.logout'), danger: true })) { closeModal(); api.logout(); }
       } })),
@@ -557,10 +588,157 @@
         if (await confirmDialog({ title: T('confirm.wipe.title'), text: T('confirm.wipe.text'), ok: T('confirm.wipe.ok'), danger: true, typed: I18N.CONFIRM_WORD[lang] })) { closeModal(); api.wipe('SIL'); }
       } })),
       h('h4', { text: T('set.how') }),
-      h('ul', { class: 'sec-list' }, [1, 2, 3, 4, 5].map((n) => h('li', { text: T('how.' + n) }))));
+      h('ul', { class: 'sec-list' }, [1, 2, 3, 4, 5, 6, 7].map((n) => h('li', { text: T('how.' + n) }))));
 
-    overlay(h('div', { class: 'modal' },
+    const settingsModal = overlay(h('div', { class: 'modal' },
       h('div', { class: 'modal-head' }, h('h3', { text: T('set.title') }), h('button', { class: 'icon-btn', onclick: closeModal }, icon('x', 18))), body));
+    void settingsModal;
+    fillDataInfo(sizeLine, cacheRow);
+  }
+
+  // ---- istatistikler ---------------------------------------------------------------------------------------
+  function statTile(label, value, sub) {
+    return h('div', { class: 'stile' }, h('div', { class: 'lab', text: label }), h('div', { class: 'val num', text: value }), h('div', { class: 'sub', text: sub || '' }));
+  }
+
+  function fillStats(body, s) {
+    const keep = body.scrollTop;
+    const L = I18N.LOCALES[lang];
+    const live = s.runningSince ? Date.now() - s.runningSince : 0;
+    const openMs = Date.now() - (S && S.appStartedAt ? S.appStartedAt : Date.now());
+    const max = Math.max(1, ...s.daily.map((d) => d.n));
+    const bars = h('div', { class: 'bars' }, s.daily.map((d) => {
+      const fill = h('i');
+      fill.style.setProperty('height', d.n ? Math.max(8, Math.round((d.n / max) * 100)) + '%' : '2px');
+      const date = new Date(d.t).toLocaleDateString(L, { day: 'numeric', month: 'short' });
+      return h('div', { class: 'bar' + (d.n ? ' on' : ''), title: date + ': ' + T('stats.cardsCount', { n: d.n }) },
+        h('b', { text: d.n ? String(d.n) : '' }), h('div', { class: 'col' }, fill),
+        h('span', { text: new Date(d.t).toLocaleDateString(L, { weekday: 'narrow' }) }));
+    }));
+    const list = (title, items, row) => h('section', { class: 'slist' }, h('h4', { text: title }),
+      items.length ? h('ul', {}, items.map(row)) : h('p', { class: 'muted small', text: T('stats.none') }));
+    const li = (name, right) => h('li', {}, h('span', { class: 'nm', text: name }), h('span', { class: 'rt', text: right }));
+    const avg = s.avgMinPerCard != null ? T('stats.avgVal', { m: nf.format(Math.round(s.avgMinPerCard)) }) : '—';
+
+    body.replaceChildren(
+      h('div', { class: 'sgrid' },
+        statTile(T('stats.cards'), nf.format(s.cardsTotal), T('stats.cardsSub', { n: nf.format(s.cardsSession) })),
+        statTile(T('stats.value'), s.valueText && s.cardsTotal ? s.valueText : '—', s.valueSessionText && s.cardsSession ? T('stats.valueSub', { v: s.valueSessionText }) : ''),
+        statTile(T('stats.time'), longDur(s.activeMs + live), T('stats.timeSub', { t: longDur(s.sessionActiveMs + live) })),
+        statTile(T('stats.open'), longDur(openMs), T('stats.openSub')),
+        statTile(T('stats.gamesRun'), nf.format(s.gamesRun), ''),
+        statTile(T('stats.gamesDropped'), nf.format(s.gamesDropped), ''),
+        statTile(T('stats.gamesNoDrop'), nf.format(s.gamesNoDrop), T('stats.gamesNoDropSub', { w: s.waiting, s: s.gamesStalled })),
+        statTile(T('stats.avg'), avg, T('stats.today') + ' ' + nf.format(s.today) + ' · ' + T('stats.week') + ' ' + nf.format(s.week))),
+      h('section', { class: 'slist' }, h('h4', { text: T('stats.chart') }), bars),
+      h('div', { class: 'two' },
+        list(T('stats.top'), s.top, (g) => li(g.name, T('stats.cardsCount', { n: g.cards }) + ' · ' + T('stats.idle', { t: longDur(g.idleMs) }))),
+        list(T('stats.stalled'), s.stalled, (g) => li(g.name, T('stats.stalledFor', { t: longDur(g.ms) })))),
+      list(T('stats.recent'), s.recent, (g) => li(g.name + '  +' + g.n, new Date(g.t).toLocaleString(L, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))),
+      h('div', { class: 'sfoot' },
+        h('span', { class: 'muted small', text: T('stats.since', { d: new Date(s.since).toLocaleDateString(L, { day: 'numeric', month: 'long', year: 'numeric' }) }) }),
+        h('button', { class: 'btn sm danger', text: T('stats.reset'), onclick: async () => {
+          if (await confirmDialog({ title: T('stats.resetTitle'), text: T('stats.resetText'), ok: T('stats.resetOk'), danger: true })) { await api.resetStats(); closeModal(); }
+        } })));
+    body.scrollTop = keep;
+  }
+
+  async function openStats() {
+    const body = h('div', { class: 'modal-body scroll' });
+    const m = overlay(h('div', { class: 'modal wide' },
+      h('div', { class: 'modal-head' }, h('h3', { text: T('stats.title') }), h('button', { class: 'icon-btn', onclick: closeModal }, icon('x', 18))), body));
+    const load = async () => { const r = await api.getStats(); if (r && r.ok && modal === m) fillStats(body, r.stats); };
+    await load();
+    const timer = setInterval(() => { if (modal !== m) { clearInterval(timer); return; } load(); }, 3000);
+  }
+
+  // ---- oturum, oyun bilgisi, veri bilgisi ------------------------------------------------------------------
+  function fmtBytes(n) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${nf.format(Math.round(n / 102.4) / 10)} KB`;
+    return `${nf.format(Math.round(n / 104857.6) / 10)} MB`;
+  }
+
+  function fmtDateTime(t) {
+    return t ? new Date(t).toLocaleString(I18N.LOCALES[lang], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+  }
+
+  function fillSession(body, s) {
+    const keep = body.scrollTop;
+    const kv = (label, value) => h('div', { class: 'srow' }, h('span', { class: 'k', text: label }), h('span', { class: 'v', text: value }));
+    const onOff = (b) => (b ? T('sess.on') : T('lock.off'));
+    const state = s.run === 'running' ? (s.blocked ? T('st.waiting') : T('st.running')) : (s.run === 'paused' ? T('st.paused') : T('st.ready'));
+    const bits = s.kdf ? Math.round(Math.log2(s.kdf.N)) : null;
+    body.replaceChildren(
+      h('div', { class: 'slist' },
+        kv(T('sess.account'), s.account || '—'),
+        kv(T('sess.steamid'), s.steamid || '—'),
+        kv(T('sess.status'), s.net === 'online' ? T('sess.online') : T('sess.offline')),
+        kv(T('sess.signedIn'), fmtDateTime(s.signedInAt)),
+        kv(T('sess.connectedAt'), fmtDateTime(s.connectedAt)),
+        kv(T('sess.appOpen'), longDur(Date.now() - s.appStartedAt)),
+        kv(T('sess.state'), state),
+        kv(T('sess.idling'), nf.format(s.idling)),
+        kv(T('sess.running'), longDur(s.activeMs))),
+      h('h4', { text: T('set.security') }),
+      h('div', { class: 'slist' },
+        kv(T('sess.token'), s.tokenStored ? T('sess.tokenYes') : T('sess.tokenNo')),
+        kv(T('sess.vault'), bits ? T('sess.vaultVal', { n: '2^' + bits }) : '—'),
+        kv(T('sess.failed'), nf.format(s.failedAttempts)),
+        kv(T('sess.autolock'), s.lockMinutes ? T('sess.autolockVal', { n: s.lockMinutes }) : T('lock.off')),
+        kv(T('set.lockMin'), onOff(s.lockOnMinimize)),
+        kv(T('sess.capture'), onOff(s.hideFromCapture)),
+        kv(T('set.launch'), onOff(s.launchAtLogin)),
+        kv(T('sess.dir'), s.dataDir)),
+      h('p', { class: 'muted small', text: T('sess.hint') }));
+    body.scrollTop = keep;
+  }
+
+  async function openSession() {
+    const body = h('div', { class: 'modal-body scroll' });
+    const m = overlay(h('div', { class: 'modal' },
+      h('div', { class: 'modal-head' }, h('h3', { text: T('sess.title') }), h('button', { class: 'icon-btn', onclick: closeModal }, icon('x', 18))), body));
+    const load = async () => { const r = await api.getSession(); if (r && r.ok && modal === m) fillSession(body, r.session); };
+    await load();
+    const timer = setInterval(() => { if (modal !== m) { clearInterval(timer); return; } load(); }, 3000);
+  }
+
+  function openGameInfo(r) {
+    const chips = h('div', { class: 'chips' });
+    const desc = h('p', { class: 'gdesc muted', text: T('info.loading') });
+    const meta = h('div', { class: 'slist' });
+    const head = h('div', { class: 'gart' }, gameImg(r.appid, 'header'));
+    const facts = [
+      h('span', { class: 'chip', text: T('info.hours') + ': ' + nf.format(r.hours) }),
+      h('span', { class: 'chip', text: T('info.drops') + ': ' + r.drops }),
+      r.valueText ? h('span', { class: 'chip', text: '≈ ' + r.valueText }) : null,
+    ].filter(Boolean);
+    const m = overlay(h('div', { class: 'modal' },
+      h('div', { class: 'modal-head' }, h('h3', { text: r.name }), h('button', { class: 'icon-btn', onclick: closeModal }, icon('x', 18))),
+      h('div', { class: 'modal-body scroll' }, head, h('div', { class: 'chips gfacts' }, facts), desc, chips, meta,
+        h('div', { class: 'sfoot' },
+          h('div', { class: 'row-btns' },
+            r.black ? null : h('button', { class: 'btn sm', onclick: () => { api.pin(r.appid); closeModal(); } }, icon('play', 14), T('row.runNow')),
+            h('button', { class: 'btn sm', onclick: () => { api.blacklist(r.appid, !r.black); closeModal(); } }, icon(r.black ? 'eye' : 'eyeoff', 14), r.black ? T('row.unhide') : T('row.hide'))),
+          h('button', { class: 'btn sm', onclick: () => api.openStore(r.appid) }, T('info.store'))))));
+    api.getGameInfo(r.appid).then((res) => {
+      if (modal !== m) return;
+      const info = res && res.ok ? res.info : null;
+      if (!info) { desc.textContent = T('info.none'); return; }
+      desc.textContent = info.desc || T('info.none');
+      desc.classList.toggle('muted', !info.desc);
+      chips.replaceChildren(...info.genres.map((g) => h('span', { class: 'chip', text: g })));
+      const kv = (a, b) => h('div', { class: 'srow' }, h('span', { class: 'k', text: a }), h('span', { class: 'v', text: b }));
+      meta.replaceChildren(...[info.devs.length ? kv(T('info.developer'), info.devs.join(', ')) : null, info.release ? kv(T('info.release'), info.release) : null].filter(Boolean));
+    });
+  }
+
+  async function fillDataInfo(sizeLine, cacheRow) {
+    const r = await api.getDataInfo();
+    if (!r || !r.ok) return;
+    sizeLine.textContent = T('data.size', { size: fmtBytes(r.data.total) });
+    const hint = cacheRow.querySelector('.txt span');
+    if (hint) hint.textContent = T('data.cacheHint', { size: fmtBytes(r.data.cache) });
   }
 
   // ---- giriş noktası ---------------------------------------------------------------------------------------

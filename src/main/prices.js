@@ -114,6 +114,9 @@ class PriceService extends EventEmitter {
 
   progress() { return { done: this.done, total: this.total }; }
 
+  /** Bekleyen fiyat isteklerini bırakır (önbellek temizlenince). */
+  clear() { this.queue = []; this.total = 0; this.done = 0; }
+
   stop() { this.stopped = true; this.queue = []; }
 
   async _loop() {

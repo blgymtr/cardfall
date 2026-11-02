@@ -1,7 +1,7 @@
 name: Release
 
 # Run manually (Actions -> Release -> Run workflow) with the tag to publish, e.g. v1.2.0.
-# The workflow builds the installer on a clean Windows runner, checksums it and creates the release.
+# The workflow builds the installer on a clean Windows runner, checksums it, attests its provenance and creates the release.
 on:
   workflow_dispatch:
     inputs:
@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -23,6 +25,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
       - run: npx electron-builder --win nsis --publish never
       - name: Checksum
         shell: pwsh
@@ -30,6 +33,10 @@ jobs:
           $f = Get-ChildItem release\Cardfall-Setup-*.exe | Select-Object -First 1
           $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
           "$h  $($f.Name)" | Out-File -Encoding ascii release\SHA256SUMS.txt
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/Cardfall-Setup-*.exe
       - name: Publish release
         shell: pwsh
         env:
